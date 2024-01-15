@@ -244,7 +244,7 @@ def plot_ideogram(
             (max(x_range) - min(x_range)) / 2
 
         else:
-            ax.broken_barh(xrange, yrange, facecolors=df["colour"], alpha=0.6)
+            ax.broken_barh(xrange, yrange, facecolors=df["colour"], alpha=0.5, zorder=2)
 
     # Define and draw the centromere using the rows marked as 'cen' in the 'gieStain' column
     cen_df = df[df["gieStain"].str.contains("cen")]
@@ -282,14 +282,14 @@ def plot_ideogram(
     if vertical == Orientation.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
         cen_poly = [coords[::-1] for coords in cen_poly]
-    cen_patch = PathPatch(MplPath(cen_poly), facecolor=(0.8, 0.4, 0.4), lw=0, alpha=1, zorder=2)
+    cen_patch = PathPatch(MplPath(cen_poly), facecolor=(0.8, 0.4, 0.4), lw=0, alpha=0.5, zorder=2)
     ax.add_patch(cen_patch)
 
     chr_move, chr_poly = zip(
         *outline,
         strict=True,
     )
-    chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill=None, joinstyle="round", alpha=1, zorder=2)
+    chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill=None, joinstyle="round", alpha=0.5, zorder=2)
     ax.add_patch(chr_patch)
 
         
@@ -348,9 +348,8 @@ def plot_ideogram(
                 fill=kwargs.get("fill", True),
                 color=r_colour,
                 joinstyle="round",
-                zorder=3,
-                alpha=kwargs.get("alpha", 0.5),
-                lw=kwargs.get("lw", 1),
+                zorder=1,
+                alpha=0.6,
             )
             ax.add_patch(r)
 
