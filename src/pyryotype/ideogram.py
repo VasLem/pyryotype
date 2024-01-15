@@ -162,6 +162,7 @@ def plot_ideogram(
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands: Detail = Detail.CYTOBAND,
     relative: bool = True,
+    **kwargs,    
 ):
     """
     Plot a chromosome ideogram with cytobands and optionally highlight a specific region.
@@ -344,8 +345,8 @@ def plot_ideogram(
             r = Rectangle(
                 (x0, y0),  # +0.01 should shift us off outline of chromosome
                 width=width,
-                height=0.94,
-                fill=True,
+                height=height,
+                fill=kwargs.get("fill", True),
                 color=r_colour,
                 joinstyle="round",
             )
