@@ -103,7 +103,7 @@ def test_23_vertical_chm13_bare():
         _ax = plot_ideogram(
             ax,
             target=f"chr{i}",
-            y_label="Chr. {i}",
+            y_label=f"Chr. {i}",
             left_margin=0,
             vertical=Orientation.VERTICAL,
             cytobands=Detail.BARE,
@@ -121,7 +121,7 @@ def test_23_horizontal_chm13_bare():
         _ax = plot_ideogram(
             ax,
             target=f"chr{i}",
-            y_label="Chr. {i}",
+            y_label=f"Chr. {i}",
             left_margin=0,
             vertical=Orientation.HORIZONTAL,
             cytobands=Detail.BARE,

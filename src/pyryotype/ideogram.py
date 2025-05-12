@@ -10,7 +10,9 @@ from matplotlib.path import Path as MplPath
 from matplotlib.typing import ColorType
 
 from pyryotype.plotting_utils import set_xmargin
-from typing import Union
+import re
+from typeguard import check_type
+import numpy as np
 
 
 class GENOME(Enum):
@@ -79,7 +81,24 @@ def get_cytobands(genome: GENOME) -> Path:
             raise ValueError(msg)
 
 
-def get_cytoband_df(genome: GENOME) -> pd.DataFrame:
+CHR_PATT = re.compile(r"^(?:chr([0-9]+|x|y|m)(.*)|(.*))$")
+
+def chr_to_ord(x: str):
+    out = re.match(CHR_PATT, x.lower())
+    if out[3]:
+        return (out[3], 0, "")
+    chr = out[1].lower()
+    if chr == "x":
+        chr = 23
+    elif chr == "y":
+        chr = 24
+    elif chr == "m":
+        chr = 25
+    if out[2]:
+        return ("chr", int(chr), out[2])
+    return (".", int(chr), "")  # make sure the canonical part stays on top
+
+def get_cytoband_df(genome: GENOME, relative: bool) -> pd.DataFrame:
     """
     Convert the cytogram file for the given genome into a dataframe.
     :param genome: The genome to plot the ideogram for.
@@ -100,7 +119,28 @@ def get_cytoband_df(genome: GENOME) -> pd.DataFrame:
     cytobands["arm"] = cytobands["name"].str[0]
     cytobands["colour"] = cytobands["gieStain"].map(COLOUR_LOOKUP)
     cytobands["width"] = cytobands["chromEnd"] - cytobands["chromStart"]
+    if relative:
+        return cytobands
+    # Sort the chromosomes in a canonical order
+    cytobands = cytobands.sort_values(
+        by="chrom",
+        key=lambda x: x.map(chr_to_ord),
+    )
+    # Add a column for the cumulated sum of the chromosome length..
+    cumsumlengths = (cytobands.groupby("chrom",sort=False)["chromEnd"].max() - cytobands.groupby("chrom",sort=False)["chromStart"].min()).cumsum()
+    # .. to produce the absolute offset of each chromosome
+    offset = pd.Series(np.hstack([[0], cumsumlengths[:-1]]), cumsumlengths.index, name="offset")
+    cytobands = cytobands.merge(
+        offset,
+        left_on="chrom",
+        right_index=True,
+    )
+    cytobands["chromStart"] += cytobands["offset"]
+    cytobands["chromEnd"] += cytobands["offset"]
+    cytobands = cytobands.drop(columns=["offset"])
     return cytobands
+
+
 
 
 def plot_ideogram(
@@ -121,6 +161,7 @@ def plot_ideogram(
     vertical: Orientation = Orientation.HORIZONTAL,
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands: Detail = Detail.CYTOBAND,
+    relative: bool = True,
     **kwargs,
 ):
     """
@@ -144,6 +185,7 @@ def plot_ideogram(
     :param regions: List of regions to colour in on the karyotype. Respects vertical kwarg - a region should
     be a tuple of format (start, stop, colour)
     :param cytobands: Whether to render cytobands
+    :param relative: Whether to plot the ideogram in relative coordinates (start of chromosome is 0) (default: True).
 
     :return: Updated axis object with the plotted ideogram.
 
@@ -175,9 +217,9 @@ def plot_ideogram(
             assert isinstance(region[0], int), "Start must be an integer"
             assert isinstance(region[1], int), "Stop must be an integer"
             assert region[0] < region[1], "Start must be less than stop"
-            assert isinstance(region[2], ColorType), "Third element must be a colour"
+            assert check_type(region[2], ColorType), "Third element must be a colour"
     
-    df = get_cytoband_df(genome)
+    df = get_cytoband_df(genome, relative=relative)
     chr_names = df["chrom"].unique()
     df = df[df["chrom"].eq(target)]
     if df.empty:
@@ -187,7 +229,9 @@ def plot_ideogram(
     # Beginning with plotting
     yrange = (lower_anchor, height)
     xrange = df[["chromStart", "width"]].values
-    chr_len = df["chromEnd"].max()
+    chr_start = df["chromStart"].min()
+    chr_end = df["chromEnd"].max()
+    chr_len = chr_end - chr_start
     ymid = (max(yrange) - min(yrange)) / 2
     if cytobands == Detail.CYTOBAND:
         if vertical == Orientation.VERTICAL:
@@ -206,33 +250,34 @@ def plot_ideogram(
     cen_df = df[df["gieStain"].str.contains("cen")]
     cen_start = cen_df["chromStart"].min()
     cen_end = cen_df["chromEnd"].max()
+
     cen_poly = [
         (cen_start, lower_anchor),
         (cen_start, height),
         (cen_end, lower_anchor),
         (cen_end, height),
     ]
-    # if vertical == Orientation.VERTICAL:
-
+    chr_end_with_curve = chr_end + chr_len * curve
+    chr_start_with_curve = chr_start - chr_len * curve
     # Define and draw the chromosome outline, taking into account the shape around the centromere
     outline = [
-        (MplPath.MOVETO, (lower_anchor, height)),
+        (MplPath.MOVETO, (chr_start, height)),
         # Top left, bottom right: ‾\_
         (MplPath.LINETO, (cen_start, height)),
         (MplPath.LINETO, (cen_end, lower_anchor)),
-        (MplPath.LINETO, (chr_len, lower_anchor)),
+        (MplPath.LINETO, (chr_end, lower_anchor)),
         # Right telomere: )
-        (MplPath.LINETO, (chr_len, lower_anchor)),
-        (MplPath.CURVE3, (chr_len + chr_len * curve, ymid)),
-        (MplPath.LINETO, (chr_len, height)),
+        (MplPath.LINETO, (chr_end, lower_anchor)),
+        (MplPath.CURVE3, (chr_end_with_curve, ymid)),
+        (MplPath.LINETO, (chr_end, height)),
         # Top right, bottom left: _/‾
         (MplPath.LINETO, (cen_end, height)),
         (MplPath.LINETO, (cen_start, lower_anchor)),
-        (MplPath.LINETO, (lower_anchor, lower_anchor)),
+        (MplPath.LINETO, (chr_start, lower_anchor)),
         # Left telomere: (
-        (MplPath.CURVE3, (lower_anchor - chr_len * curve, ymid)),
-        (MplPath.LINETO, (lower_anchor, height)),
-        (MplPath.CLOSEPOLY, (lower_anchor, height)),
+        (MplPath.CURVE3, (chr_start_with_curve, ymid)),
+        (MplPath.LINETO, (chr_start, height)),
+        (MplPath.CLOSEPOLY, (chr_start, height)),
     ]
     if vertical == Orientation.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
@@ -278,6 +323,12 @@ def plot_ideogram(
                     joinstyle="round",
                 )
             ax.add_patch(r)
+    else:
+        if not relative:
+            if vertical == Orientation.HORIZONTAL:
+                ax.set_xlim(chr_start_with_curve, chr_end_with_curve)
+            else:
+                ax.set_ylim(chr_start_with_curve, chr_end_with_curve)
 
     if regions:
         for r_start, r_stop, r_colour in regions:
