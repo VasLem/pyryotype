@@ -26,6 +26,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
+    "typeguard",
     "matplotlib",
     "numpy",
     "pandas",
