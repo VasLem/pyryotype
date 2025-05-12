@@ -27,7 +27,7 @@ def test_23_vertical_chm13():
 
     for ax, i in zip(axes, chain(range(1, 23), iter("XY")), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label="Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23.png", bbox_inches="tight")
@@ -39,10 +39,22 @@ def test_23_vertical_hg38():
 
     for ax, i in zip(axes, chain(range(1, 23)), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label="Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23_hg38.png", bbox_inches="tight")
+
+
+def test_23_vertical_hg19():
+    genome = GENOME.HG19
+    fig, axes = plt.subplots(ncols=22, nrows=1, figsize=(15, 25), facecolor="white", sharey=True)
+
+    for ax, i in zip(axes, chain(range(1, 23)), strict=True):
+        _ax = plot_ideogram(
+            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+        )
+
+    fig.savefig(OUT_DIR / "testing_vert_23_hg19.png", bbox_inches="tight")
 
 
 def test_23_vertical_chm13_bare():
