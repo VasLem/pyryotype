@@ -19,7 +19,45 @@ def test_simple_vertical_chr1():
     plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.VERTICAL)
 
     fig.savefig(OUT_DIR / "testing_vert.png", bbox_inches="tight")
+    
+def test_simple_horizontal_chr1():
+    fig, ax = plt.subplots(
+        ncols=1,
+        nrows=1,
+        figsize=(25, 3),
+        facecolor="white",
+    )
 
+    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.HORIZONTAL)
+
+    fig.savefig(OUT_DIR / "testing_horz.png", bbox_inches="tight")
+    
+
+def test_simple_vertical_chr1_start_stop():
+    fig, ax = plt.subplots(
+        ncols=1,
+        nrows=1,
+        figsize=(3, 25),
+        facecolor="white",
+    )
+
+    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.VERTICAL, start=150000, stop=50000000)
+
+    fig.savefig(OUT_DIR / "testing_vert_start_stop.png", bbox_inches="tight")
+    
+    
+def test_simple_horizontal_chr1_start_stop_zoom():
+    fig, ax = plt.subplots(
+        ncols=1,
+        nrows=1,
+        figsize=(25, 3),
+        facecolor="white",
+    )
+
+    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.HORIZONTAL, start=150000, stop=50000000, zoom=True)
+
+    fig.savefig(OUT_DIR / "testing_horz_start_stop_zoom.png", bbox_inches="tight")
+    
 
 def test_23_vertical_chm13():
     genome = GENOME.CHM13
