@@ -12,6 +12,7 @@ from pyryotype.plotting_utils import set_xmargin
 
 
 class GENOME(Enum):
+    HG19 = "hg19"
     HG38 = "hg38"
     CHM13 = "chm13"
     HS1 = "hs1"
@@ -63,6 +64,8 @@ def get_cytobands(genome: GENOME) -> Path:
     ValueError: Unknown genome: invalid_genome
     """
     match genome:
+        case GENOME.HG19:
+            return STATIC_PATH / "cytobands_hg19.bed"
         case GENOME.HG38:
             return STATIC_PATH / "cytobands_hg38.bed"
         case GENOME.CHM13:
