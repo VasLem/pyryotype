@@ -9,6 +9,7 @@ from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
 
 from pyryotype.plotting_utils import set_xmargin
+from typing import Dict, Any
 
 
 class GENOME(Enum):
@@ -279,6 +280,73 @@ def plot_ideogram(
 
     return ax
 
+
+
+class GenomicAnnotationPlotter:
+    """
+    Class to plot genomic annotations on a chromosome ideogram.
+    """
+
+    def __init__(
+        self, 
+        target: str,
+        genome: GENOME = GENOME.HG38,
+        start: int | None = None,
+        stop: int | None = None,
+        target_region_extent: float = 0.3,
+        y_label: str | None = None,
+        vertical: Orientation = Orientation.HORIZONTAL,
+        regions: list[tuple[int, int, str]] | None = None,
+        cytobands: Detail = Detail.CYTOBAND):
+        """
+        Plot a chromosome ideogram with cytobands and optionally highlight a specific region.
+
+        :param ax: Matplotlib axis object where the ideogram will be plotted.
+        :param cytobands_df: DataFrame containing cytoband data with columns "chrom", "chromStart",
+        "chromEnd", "gieStain", and "colour".
+        :param target: Target chromosome to filter and plot.
+        :param start: Starting base pair position for the region of interest (optional).
+        :param stop: Ending base pair position for the region of interest (optional).
+        :param lower_anchor: Lower anchor point for the ideogram, for outline.
+        :param height: Height of the ideogram.
+        :param curve: Curve factor for the ideogram edges.
+        :param y_margin: Margin for the y-axis.
+        :param right_margin: Margin for the right side of the x-axis.
+        :param left_margin: Margin for the left side of the x-axis.
+        :param target_region_extent: Extent of the target region highlight.
+        :param vertical: Orientation of ideogram. False draws horizontal ideograms.
+        :param regions: List of regions to colour in on the karyotype. Respects vertical kwarg - a region should
+        be a tuple of format (start, stop, colour)
+        :param cytobands: Whether to render cytobands
+
+        :return: Updated axis object with the plotted ideogram.
+
+        >>> import matplotlib.pyplot as plt
+        >>> fig, ax = plt.subplots()
+        >>> ax = plot_ideogram(ax, "chr1", start=50, stop=250, y_label="Chromosome 1")
+        >>> ax.get_xlim()  # To test if the ideogram was plotted (not a direct measure but gives an idea)
+        (-71574971.325, 256487353.7655)
+
+        # Test behaviour with a non-existent chromosome
+        >>> ax = plot_ideogram(ax, "chr_1", start=50, stop=250, y_label="Chromosome 1")# doctest: +IGNORE_EXCEPTION_DETAIL
+        Traceback (most recent call last):
+        ValueError: Chromosome chr_1 not found in cytoband data. Should be one of ...
+
+        """
+        self.genome = genome
+        self.cytobands_df = get_cytoband_df(genome)
+
+    def plot(self, ax: Axes, target: str, ideogram_kwargs: Dict[str, Any]):
+        """
+        Plot the ideogram for the specified target chromosome.
+
+        :param ax: Matplotlib axis object where the ideogram will be plotted.
+        :param target: Target chromosome to filter and plot.
+        :param ideogram_kwargs: Additional keyword arguments for the ideogram customization.
+        """
+        return plot_ideogram(ax, target=target, genome=self.genome, **ideogram_kwargs)
+    
+    
 
 if __name__ == "__main__":
     fig, axes = plt.subplots(
