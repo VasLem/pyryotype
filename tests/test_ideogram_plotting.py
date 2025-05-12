@@ -2,7 +2,7 @@ from itertools import chain
 from pathlib import Path
 
 from matplotlib import pyplot as plt
-from pyryotype import plot_ideogram
+from pyryotype import plot_ideogram, make_ideogram_grid
 from pyryotype.ideogram import GENOME, Detail, Orientation
 
 OUT_DIR = Path(__file__).parent.parent / "example_outputs"
@@ -170,3 +170,12 @@ def test_23_horz_chm13_regions():
         )
 
     fig.savefig(OUT_DIR / "testing_horz_23_regions.png", bbox_inches="tight")
+
+
+
+def test_ideogram_grid_generation():
+    fig, axes, ideogram_ax = make_ideogram_grid(
+        target="chr1",
+        num_subplots=2,
+    )
+    fig.savefig(OUT_DIR / "testing_ideogram_grid.png", bbox_inches="tight")

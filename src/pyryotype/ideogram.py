@@ -13,6 +13,7 @@ from pyryotype.plotting_utils import set_xmargin
 import re
 from typeguard import check_type
 import numpy as np
+from matplotlib.gridspec import GridSpec as gs
 
 
 class GENOME(Enum):
@@ -162,6 +163,8 @@ def plot_ideogram(
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands: Detail = Detail.CYTOBAND,
     relative: bool = True,
+    adjust_margins: bool = True,
+    lims_on_curve: bool = True,
     **kwargs,    
 ):
     """
@@ -186,6 +189,8 @@ def plot_ideogram(
     be a tuple of format (start, stop, colour)
     :param cytobands: Whether to render cytobands
     :param relative: Whether to plot the ideogram in relative coordinates (start of chromosome is 0) (default: True).
+    :param adjust_margins: Whether to adjust the margins of the plot (default: True).
+    :param lims_on_curve: Whether to set the x-axis limits on the end of the visual (including curve), or the true ends of the chromosome (default: True).
 
     :return: Updated axis object with the plotted ideogram.
 
@@ -326,9 +331,9 @@ def plot_ideogram(
     else:
         if not relative:
             if vertical == Orientation.HORIZONTAL:
-                ax.set_xlim(chr_start_with_curve, chr_end_with_curve)
+                ax.set_xlim(chr_start_with_curve if lims_on_curve else chr_start, chr_end_with_curve if lims_on_curve else chr_end)
             else:
-                ax.set_ylim(chr_start_with_curve, chr_end_with_curve)
+                ax.set_ylim(chr_start_with_curve if lims_on_curve else chr_start, chr_end_with_curve if lims_on_curve else chr_end)
 
     if regions:
         for r_start, r_stop, r_colour in regions:
@@ -353,10 +358,10 @@ def plot_ideogram(
                 lw=kwargs.get("lw", 1),
             )
             ax.add_patch(r)
-
-    # Adjust x-axis margins
-    set_xmargin(ax, left=left_margin, right=right_margin)
-    ax.set_ymargin(y_margin)
+    if adjust_margins:
+        # Adjust x-axis margins
+        set_xmargin(ax, left=left_margin, right=right_margin)
+        ax.set_ymargin(y_margin)
 
     # Remove axis spines and ticks for a cleaner look
     for side in ("top", "right", "bottom", "left"):
@@ -374,6 +379,57 @@ def plot_ideogram(
             ax.text(x0, 1, y_label, fontsize=kwargs.get("fontsize", "x-large"), va="bottom")
 
     return ax
+
+def make_ideogram_grid(
+    target: str, 
+    genome: GENOME = GENOME.HG38,
+    start: int | None = None,
+    stop: int | None = None,
+    num_subplots=1, 
+    subplot_width=3, 
+    height_ratio = 0.5,
+    ideogram_factor:float = 0.1,
+    **ideogram_kwargs):
+    """
+    Create a grid of subplots, with an ideogram at the bottom. Meant to plot multiple features on the same chromosome.
+    :param target: Target chromosome to plot.
+    :param genome: Genome variant to use.
+    :param start: Starting base pair position for the region of interest (optional). If start is None, stop must also be None.
+    :param stop: Ending base pair position for the region of interest (optional). If stop is None, start must also be None.
+    :param num_subplots: Number of subplots to create.
+    :param subplot_width: Width of each subplot.
+    :param height_ratio: Height ratio for the subplots.
+    :param ideogram_factor: Height factor for the ideogram.
+    :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
+    :return: A tuple containing the figure and a list of axes for the subplots.
+    """
+    pfactor = int(1/ideogram_factor)
+    gspec = gs(pfactor * num_subplots + num_subplots,1)
+    fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots), facecolor="white")
+    axes = []
+    for i in range(num_subplots):
+        ax = fig.add_subplot(gspec[pfactor * i : pfactor * (i + 1), 0])
+        axes.append(ax)
+    for ax in axes[1:]:
+        ax.sharex(axes[0])
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+        ax.set_xlabel("")
+    ideogram_kwargs.update({
+        "target": target,
+        "genome": genome,
+        "start": start,
+        "stop": stop,
+        "zoom": start is not None and stop is not None,
+        "relative": ideogram_kwargs.get("relative",False),
+        "adjust_margins": False,
+        "lims_on_curve" : False,
+    })
+    ideogram_ax = plot_ideogram(fig.add_subplot(gspec[-num_subplots, 0], sharex=axes[0]), **ideogram_kwargs)
+    for ax in axes:
+        ax.set_xlim(ideogram_ax.get_xlim())
+    return fig, axes, ideogram_ax
+    
 
 
 if __name__ == "__main__":
