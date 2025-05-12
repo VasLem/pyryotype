@@ -7,8 +7,10 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
+from matplotlib.typing import ColorType
 
 from pyryotype.plotting_utils import set_xmargin
+from typing import Union
 
 
 class GENOME(Enum):
@@ -107,6 +109,7 @@ def plot_ideogram(
     genome: GENOME = GENOME.HG38,
     start: int | None = None,
     stop: int | None = None,
+    zoom: bool = False,
     lower_anchor: int = 0,
     height: int = 1,
     curve: float = 0.05,
@@ -116,7 +119,7 @@ def plot_ideogram(
     target_region_extent: float = 0.3,
     y_label: str | None = None,
     vertical: Orientation = Orientation.HORIZONTAL,
-    regions: list[tuple[int, int, str]] | None = None,
+    regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands: Detail = Detail.CYTOBAND,
 ):
     """
@@ -128,6 +131,7 @@ def plot_ideogram(
     :param target: Target chromosome to filter and plot.
     :param start: Starting base pair position for the region of interest (optional).
     :param stop: Ending base pair position for the region of interest (optional).
+    :param zoom: Whether to zoom in on the region of interest. If not, only a box will be drawn around that region (default: False).
     :param lower_anchor: Lower anchor point for the ideogram, for outline.
     :param height: Height of the ideogram.
     :param curve: Curve factor for the ideogram edges.
@@ -155,12 +159,31 @@ def plot_ideogram(
 
     """
     # TODO: various kwds params for passing through to other methods
+    
+    # some checks for input before we start
+    if start is not None:
+        assert stop is not None, "If start is provided, stop must also be provided"
+    if stop is not None:
+        assert start is not None, "If stop is provided, start must also be provided"
+    if start is not None:        
+        assert start < stop, "Start must be less than stop"
+    if regions is not None:
+        assert isinstance(regions, list), "Regions must be a list of tuples"
+        for region in regions:
+            assert len(region) == 3, "Each region must be a tuple of (start, stop, colour)"
+            assert isinstance(region[0], int), "Start must be an integer"
+            assert isinstance(region[1], int), "Stop must be an integer"
+            assert region[0] < region[1], "Start must be less than stop"
+            assert isinstance(region[2], ColorType), "Third element must be a colour"
+    
     df = get_cytoband_df(genome)
     chr_names = df["chrom"].unique()
     df = df[df["chrom"].eq(target)]
     if df.empty:
         msg = f"Chromosome {target} not found in cytoband data. Should be one of {chr_names}"
         raise ValueError(msg)
+
+    # Beginning with plotting
     yrange = (lower_anchor, height)
     xrange = df[["chromStart", "width"]].values
     chr_len = df["chromEnd"].max()
@@ -224,18 +247,37 @@ def plot_ideogram(
     chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill=None, joinstyle="round")
     ax.add_patch(chr_patch)
 
+        
     # If start and stop positions are provided, draw a rectangle to highlight this region
     if start is not None and stop is not None:
-        r = Rectangle(
-            (start, lower_anchor - target_region_extent),
-            width=stop - start,
-            height=height + 2 * target_region_extent,
-            fill=False,
-            edgecolor="r",
-            linewidth=1,
-            joinstyle="round",
-        )
-        ax.add_patch(r)
+        if zoom:
+            # Zoom in on the specified region
+            if vertical == Orientation.HORIZONTAL:
+                ax.set_xlim(start, stop)
+            else:
+                ax.set_ylim(start, stop)
+        else:
+            if vertical == Orientation.HORIZONTAL:
+                r = Rectangle(
+                    (start, lower_anchor - target_region_extent),
+                    width=stop - start,
+                    height=height + 2 * target_region_extent,
+                    fill=False,
+                    edgecolor="r",
+                    linewidth=1,
+                    joinstyle="round",
+                )
+            else:
+                r = Rectangle(
+                    (lower_anchor - target_region_extent, start),
+                    width=height + 2 * target_region_extent,
+                    height=stop - start,
+                    fill=False,
+                    edgecolor="r",
+                    linewidth=1,
+                    joinstyle="round",
+                )
+            ax.add_patch(r)
 
     if regions:
         for r_start, r_stop, r_colour in regions:
