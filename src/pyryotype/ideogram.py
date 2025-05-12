@@ -10,8 +10,8 @@ from matplotlib.path import Path as MplPath
 from matplotlib.typing import ColorType
 
 from pyryotype.plotting_utils import set_xmargin
-from typing import Union
-
+from typing import List, Literal, Optional, Tuple, Union
+import re
 
 class GENOME(Enum):
     HG19 = "hg19"
@@ -103,10 +103,43 @@ def get_cytoband_df(genome: GENOME) -> pd.DataFrame:
     return cytobands
 
 
-def plot_ideogram(
+
+def _deal_with_start_stop(ax, start: Optional[int], stop: Optional[int], zoom: bool, lower_anchor: int, height: int, target_region_extent: float, vertical: Orientation):
+    if start is not None and stop is not None:
+        if zoom:
+            # Zoom in on the specified region
+            if vertical == Orientation.HORIZONTAL:
+                ax.set_xlim(start, stop)
+            else:
+                ax.set_ylim(start, stop)
+        else:
+            # draw a rectangle to highlight this region
+            if vertical == Orientation.HORIZONTAL:
+                r = Rectangle(
+                    (start, lower_anchor - target_region_extent),
+                    width=stop - start,
+                    height=height + 2 * target_region_extent,
+                    fill=False,
+                    edgecolor="r",
+                    linewidth=1,
+                    joinstyle="round",
+                )
+            else:
+                r = Rectangle(
+                    (lower_anchor - target_region_extent, start),
+                    width=height + 2 * target_region_extent,
+                    height=stop - start,
+                    fill=False,
+                    edgecolor="r",
+                    linewidth=1,
+                    joinstyle="round",
+                )
+            ax.add_patch(r)
+
+def plot_contig(
     ax: Axes,
     target: str,
-    genome: GENOME = GENOME.HG38,
+    cytoband_df: pd.DataFrame,
     start: int | None = None,
     stop: int | None = None,
     zoom: bool = False,
@@ -176,9 +209,8 @@ def plot_ideogram(
             assert region[0] < region[1], "Start must be less than stop"
             assert isinstance(region[2], ColorType), "Third element must be a colour"
     
-    df = get_cytoband_df(genome)
-    chr_names = df["chrom"].unique()
-    df = df[df["chrom"].eq(target)]
+    chr_names = cytoband_df["chrom"].unique()
+    df = cytoband_df[cytoband_df["chrom"].eq(target)]
     if df.empty:
         msg = f"Chromosome {target} not found in cytoband data. Should be one of {chr_names}"
         raise ValueError(msg)
@@ -247,37 +279,7 @@ def plot_ideogram(
     chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill=None, joinstyle="round")
     ax.add_patch(chr_patch)
 
-        
-    # If start and stop positions are provided, draw a rectangle to highlight this region
-    if start is not None and stop is not None:
-        if zoom:
-            # Zoom in on the specified region
-            if vertical == Orientation.HORIZONTAL:
-                ax.set_xlim(start, stop)
-            else:
-                ax.set_ylim(start, stop)
-        else:
-            if vertical == Orientation.HORIZONTAL:
-                r = Rectangle(
-                    (start, lower_anchor - target_region_extent),
-                    width=stop - start,
-                    height=height + 2 * target_region_extent,
-                    fill=False,
-                    edgecolor="r",
-                    linewidth=1,
-                    joinstyle="round",
-                )
-            else:
-                r = Rectangle(
-                    (lower_anchor - target_region_extent, start),
-                    width=height + 2 * target_region_extent,
-                    height=stop - start,
-                    fill=False,
-                    edgecolor="r",
-                    linewidth=1,
-                    joinstyle="round",
-                )
-            ax.add_patch(r)
+    _deal_with_start_stop(ax, start, stop, zoom, lower_anchor, height, target_region_extent, vertical)
 
     if regions:
         for r_start, r_stop, r_colour in regions:
@@ -321,16 +323,143 @@ def plot_ideogram(
 
     return ax
 
+CHR_PATT = re.compile(r"^(?:chr([0-9]+|x|y|m)(.*)|(.*))$")
 
-if __name__ == "__main__":
-    fig, axes = plt.subplots(
-        ncols=1,
-        nrows=22,
-        figsize=(11, 11),
-        facecolor="white",
-    )
-    genome = GENOME.CHM13
-    for ax, contig_name in zip(axes, range(1, 23), strict=False):
-        chromosome = f"chr{contig_name}"
-        plot_ideogram(ax, target=chromosome, genome=genome)
-    fig.savefig("ideogram.png", dpi=300)
+def chr_to_ord(x: str):
+    out = re.match(CHR_PATT, x.lower())
+    if out[3]:
+        return (out[3], 0, "")
+    chr = out[1].lower()
+    if chr == "x":
+        chr = 23
+    elif chr == "y":
+        chr = 24
+    elif chr == "m":
+        chr = 25
+    if out[2]:
+        return ("chr", int(chr), out[2])
+    return (".", int(chr), "")  # make sure the canonical part stays on top
+
+def plot_ideogram(
+    ax: Axes,
+    target: Union[Literal['all', 'autosomal'], str],
+    genome: GENOME = GENOME.HG38,
+    start: Tuple[str, int] | None = None,
+    stop: Tuple[str, int] | None = None,
+    zoom: bool = False,
+    lower_anchor: int = 0,
+    height: int = 1,
+    curve: float = 0.05,
+    y_margin: float = 0.05,
+    right_margin: float = 0.005,
+    left_margin: float = 0.25,
+    target_region_extent: float = 0.3,
+    y_label: str | None = None,
+    vertical: Orientation = Orientation.HORIZONTAL,
+    regions: List[Tuple[chr, int, int, ColorType]] | None = None,
+    cytobands: Detail = Detail.CYTOBAND,
+) -> Axes:
+    """
+    Plot a chromosome ideogram with cytobands and optionally highlight a specific region.
+
+    :param ax: Matplotlib axis object where the ideogram will be plotted.
+    :param cytobands_df: DataFrame containing cytoband data with columns "chrom", "chromStart",
+      "chromEnd", "gieStain", and "colour".
+    :param target: Target chromosome(s) to filter and plot. Can be 'all', 'autosomal', or a specific chromosome name.
+    :param start: Starting base pair position for the region of interest (optional).
+    :param stop: Ending base pair position for the region of interest (optional).
+    :param zoom: Whether to zoom in on the region of interest. If not, only a box will be drawn around that region (default: False).
+    :param lower_anchor: Lower anchor point for the ideogram, for outline.
+    :param height: Height of the ideogram.
+    :param curve: Curve factor for the ideogram edges.
+    :param y_margin: Margin for the y-axis.
+    :param right_margin: Margin for the right side of the x-axis.
+    :param left_margin: Margin for the left side of the x-axis.
+    :param target_region_extent: Extent of the target region highlight.
+    :param vertical: Orientation of ideogram. False draws horizontal ideograms.
+    :param regions: List of regions to colour in on the karyotype. Respects vertical kwarg - a region should
+    be a tuple of format (start, stop, colour)
+    :param cytobands: Whether to render cytobands
+
+    :return: Updated axis object with the plotted ideogram.
+
+    >>> import matplotlib.pyplot as plt
+    >>> fig, ax = plt.subplots()
+    >>> ax = plot_ideogram(ax, "chr1", start=50, stop=250, y_label="Chromosome 1")
+    >>> ax.get_xlim()  # To test if the ideogram was plotted (not a direct measure but gives an idea)
+    (-71574971.325, 256487353.7655)
+
+    # Test behaviour with a non-existent chromosome
+    >>> ax = plot_ideogram(ax, "chr_1", start=50, stop=250, y_label="Chromosome 1")# doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+    ValueError: Chromosome chr_1 not found in cytoband data. Should be one of ...
+
+    """
+    # TODO: various kwds params for passing through to other methods
+    
+    # some checks for input before we start
+    if start is not None:
+        assert stop is not None, "If start is provided, stop must also be provided"
+        assert isinstance(start, (list, tuple)), "Start must be a list or tuple"
+        assert len(start) == 2, "Start must be a list or tuple of length 2"
+        assert isinstance(start[0], str), "First element of start must be a string, corresponding to the chromosome"
+        assert isinstance(start[1], int), "Second element of start must be an integer, corresponding to the base pair position"
+    if stop is not None:
+        assert start is not None, "If stop is provided, start must also be provided"
+        assert isinstance(stop, (list, tuple)), "Stop must be a list or tuple"
+        assert len(stop) == 2, "Stop must be a list or tuple of length 2"
+        assert isinstance(stop[0], str), "First element of stop must be a string, corresponding to the chromosome"
+        assert isinstance(stop[1], int), "Second element of stop must be an integer, corresponding to the base pair position"
+    
+    if start is not None:        
+        assert (chr_to_ord(start[0]),start[1]) < (chr_to_ord(stop[0]), stop[1]), "Start must be less than stop"
+        
+    if regions is not None:
+        assert isinstance(regions, list), "Regions must be a list of tuples"
+        for region in regions:
+            assert len(region) == 3, "Each region must be a tuple of (start, stop, colour)"
+            assert isinstance(region[0], int), "Start must be an integer"
+            assert isinstance(region[1], int), "Stop must be an integer"
+            assert region[0] < region[1], "Start must be less than stop"
+            assert isinstance(region[2], ColorType), "Third element must be a colour"
+    
+    df = get_cytoband_df(genome)
+        
+    if target == "all":
+        target = df["chrom"].unique()
+        df = df.sort_values("chrom", key=lambda x: x.map(chr_to_ord))
+    elif target == "autosomal":
+        target = df["chrom"].unique()
+        target = [x for x in target if x.startswith("chr") and x[3:].isdigit()]
+        df = df[df["chrom"].isin(target)]
+    else:
+        assert isinstance(target, str), "Target must be a string or 'all' or 'autosomal'"
+        target = [target]
+
+    for t in target:    
+        plot_contig(
+            ax,
+            t,
+            df,
+            start=None,
+            stop=None,
+            zoom=False,
+            lower_anchor=lower_anchor,
+            height=height,
+            curve=curve,
+            y_margin=y_margin,
+            right_margin=right_margin,
+            left_margin=left_margin,
+            target_region_extent=target_region_extent,
+            y_label=y_label,
+            vertical=vertical,
+            regions=regions,
+            cytobands=cytobands
+        )
+    
+    _deal_with_start_stop(ax, start, stop, zoom, lower_anchor, height, target_region_extent, vertical)
+
+
+
+
+    return ax
