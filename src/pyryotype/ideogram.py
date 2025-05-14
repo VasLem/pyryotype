@@ -404,11 +404,11 @@ def make_ideogram_grid(
     :return: A tuple containing the figure and a list of axes for the subplots.
     """
     pfactor = int(1/ideogram_factor)
-    gspec = gs(pfactor * num_subplots + num_subplots,1)
+    gspec = gs(pfactor * num_subplots + 2 * num_subplots,1)
     fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots), facecolor="white")
     axes = []
     for i in range(num_subplots):
-        ax = fig.add_subplot(gspec[pfactor * i : pfactor * (i + 1), 0])
+        ax = fig.add_subplot(gspec[pfactor * i + i: pfactor * (i + 1) + i, 0])
         axes.append(ax)
     for ax in axes[1:]:
         ax.sharex(axes[0])
@@ -425,7 +425,7 @@ def make_ideogram_grid(
         "adjust_margins": False,
         "lims_on_curve" : False,
     })
-    ideogram_ax = plot_ideogram(fig.add_subplot(gspec[-num_subplots, 0], sharex=axes[0]), **ideogram_kwargs)
+    ideogram_ax = plot_ideogram(fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0]), **ideogram_kwargs)
     for ax in axes:
         ax.set_xlim(ideogram_ax.get_xlim())
     return fig, axes, ideogram_ax
