@@ -421,11 +421,14 @@ def make_ideogram_grid(
         "start": start,
         "stop": stop,
         "zoom": start is not None and stop is not None,
-        "relative": ideogram_kwargs.get("relative",False),
+        "relative": ideogram_kwargs.get("relative", False),
         "adjust_margins": False,
         "lims_on_curve" : False,
     })
     ideogram_ax = plot_ideogram(fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0]), **ideogram_kwargs)
+    for obj in ideogram_ax.get_children():
+        if hasattr(obj, "set_clip_on"):
+            obj.set_clip_on(False)
     for ax in axes:
         ax.set_xlim(ideogram_ax.get_xlim())
     return fig, axes, ideogram_ax
