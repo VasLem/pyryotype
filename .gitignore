@@ -161,6 +161,5 @@ cython_debug/
 #.idea/
 test_metadata.csv
 *.png
-
-# VS Code
-.vscode/settings.json
+.conda
+settings.json
