@@ -2,7 +2,7 @@ from itertools import chain
 from pathlib import Path
 
 from matplotlib import pyplot as plt
-from pyryotype import plot_ideogram, make_ideogram_grid
+from pyryotype import plot_ideogram, make_ideogram_grid, make_genome_grid
 from pyryotype.ideogram import GENOME, Detail, Orientation
 
 OUT_DIR = Path(__file__).parent.parent / "example_outputs"
@@ -77,7 +77,8 @@ def test_23_vertical_hg38():
 
     for ax, i in zip(axes, chain(range(1, 23)), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, 
+            vertical=Orientation.VERTICAL, genome=genome, relative=True
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23_hg38.png", bbox_inches="tight")
@@ -179,3 +180,39 @@ def test_ideogram_grid_generation():
         num_subplots=2,
     )
     fig.savefig(OUT_DIR / "testing_ideogram_grid.png", bbox_inches="tight")
+
+def test_ideogram_grid_generation_three_targets():
+    fig, axes, ideogram_ax = make_ideogram_grid(
+        target=["chr1", "chr2", "chr22"],
+        num_subplots=2,
+    )
+    fig.savefig(OUT_DIR / "testing_ideogram_grid_three_targets.png", bbox_inches="tight")
+
+def test_ideogram_grid_generation_three_targets_with_start_stop():
+    # should raise
+    try:
+        fig, axes, ideogram_ax = make_ideogram_grid(
+            target=["chr1", "chr2", "chr22"],
+            start=0,
+            stop=1,
+            num_subplots=2,
+        )
+        raise ValueError("Should have raised an error")
+    except ValueError as e:
+        pass
+    fig, axes, ideogram_ax = make_ideogram_grid(
+        target=["chr1", "chr2", "chr22"],
+        start={"chr1": 0, "chr2": 0, "chr22": 0},
+        stop={"chr1": 50000000, "chr2": 25000000, "chr22": 1500000},
+        zoom=True,
+        num_subplots=2,
+    )
+    fig.savefig(OUT_DIR / "testing_ideogram_grid_three_targets_with_start_stop.png")
+
+def test_genome_grid():
+    fig, axes, genome_ax = make_genome_grid(
+        target_start="chr1",
+        target_stop="chr5",
+        num_subplots=2,
+    )
+    fig.savefig(OUT_DIR / "testing_genome_grid.png", bbox_inches="tight")

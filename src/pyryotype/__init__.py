@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 from pyryotype.coverage import plot_coverage
-from pyryotype.ideogram import GENOME, plot_ideogram, make_ideogram_grid
+from pyryotype.ideogram import GENOME, plot_ideogram, make_ideogram_grid, make_genome_grid
 from pyryotype.paf_plotting import PAFProtocol, PlotMode, plot_paf_alignments
 from pyryotype.paf_tools import get_metadata_csv
 
@@ -10,6 +10,7 @@ __all__ = [
     'GENOME',
     'plot_ideogram',
     "make_ideogram_grid",
+    "make_genome_grid",
     'plot_coverage',
     'plot_paf_alignments',
     'PAFProtocol',

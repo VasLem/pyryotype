@@ -8,13 +8,15 @@ from matplotlib.axes import Axes
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
 from matplotlib.typing import ColorType
+from matplotlib.gridspec import SubplotSpec
+from matplotlib.gridspec import GridSpec as gs
+from matplotlib.gridspec import GridSpecFromSubplotSpec as gsFromSubplotSpec
 
 from pyryotype.plotting_utils import set_xmargin
 import re
 from typeguard import check_type
 import numpy as np
-from matplotlib.gridspec import GridSpec as gs
-
+from typing import Dict, Union, List
 
 class GENOME(Enum):
     HG19 = "hg19"
@@ -142,8 +144,6 @@ def get_cytoband_df(genome: GENOME, relative: bool) -> pd.DataFrame:
     return cytobands
 
 
-
-
 def plot_ideogram(
     ax: Axes,
     target: str,
@@ -153,7 +153,7 @@ def plot_ideogram(
     zoom: bool = False,
     lower_anchor: int = 0,
     height: int = 1,
-    curve: float = 0.05,
+    curve: float = 0.02,
     y_margin: float = 0.05,
     right_margin: float = 0.005,
     left_margin: float = 0.25,
@@ -161,19 +161,18 @@ def plot_ideogram(
     y_label: str | None = None,
     vertical: Orientation = Orientation.HORIZONTAL,
     regions: list[tuple[int, int, ColorType]] | None = None,
+    cytobands_df: pd.DataFrame = None,
     cytobands: Detail = Detail.CYTOBAND,
     relative: bool = True,
     adjust_margins: bool = True,
-    lims_on_curve: bool = True,
+    _arrange_absolute_ax_lims: bool = True,
     **kwargs,    
 ):
     """
     Plot a chromosome ideogram with cytobands and optionally highlight a specific region.
 
     :param ax: Matplotlib axis object where the ideogram will be plotted.
-    :param cytobands_df: DataFrame containing cytoband data with columns "chrom", "chromStart",
-      "chromEnd", "gieStain", and "colour".
-    :param target: Target chromosome to filter and plot.
+    :param target: target chromosome to filter and plot.
     :param start: Starting base pair position for the region of interest (optional).
     :param stop: Ending base pair position for the region of interest (optional).
     :param zoom: Whether to zoom in on the region of interest. If not, only a box will be drawn around that region (default: False).
@@ -187,10 +186,11 @@ def plot_ideogram(
     :param vertical: Orientation of ideogram. False draws horizontal ideograms.
     :param regions: List of regions to colour in on the karyotype. Respects vertical kwarg - a region should
     be a tuple of format (start, stop, colour)
+    :param cytobands_df: DataFrame containing cytoband data with columns "chrom", "chromStart",
+      "chromEnd", "gieStain", and "colour".
     :param cytobands: Whether to render cytobands
-    :param relative: Whether to plot the ideogram in relative coordinates (start of chromosome is 0) (default: True).
+    :param relative: Whether to plot the ideogram in relative coordinates (start of chromosome is 0) (default: True if single chromosome, False if target_stop!=target_start).
     :param adjust_margins: Whether to adjust the margins of the plot (default: True).
-    :param lims_on_curve: Whether to set the x-axis limits on the end of the visual (including curve), or the true ends of the chromosome (default: True).
 
     :return: Updated axis object with the plotted ideogram.
 
@@ -209,11 +209,7 @@ def plot_ideogram(
     # TODO: various kwds params for passing through to other methods
     
     # some checks for input before we start
-    if start is not None:
-        assert stop is not None, "If start is provided, stop must also be provided"
-    if stop is not None:
-        assert start is not None, "If stop is provided, start must also be provided"
-    if start is not None:        
+    if start is not None and stop is not None:        
         assert start < stop, "Start must be less than stop"
     if regions is not None:
         assert isinstance(regions, list), "Regions must be a list of tuples"
@@ -223,9 +219,13 @@ def plot_ideogram(
             assert isinstance(region[1], int), "Stop must be an integer"
             assert region[0] < region[1], "Start must be less than stop"
             assert check_type(region[2], ColorType), "Third element must be a colour"
-    
-    df = get_cytoband_df(genome, relative=relative)
+    if cytobands_df is None:
+        df = get_cytoband_df(genome, relative=relative)
+    else:
+        df = cytobands_df
     chr_names = df["chrom"].unique()
+    
+    
     df = df[df["chrom"].eq(target)]
     if df.empty:
         msg = f"Chromosome {target} not found in cytoband data. Should be one of {chr_names}"
@@ -256,50 +256,78 @@ def plot_ideogram(
     cen_start = cen_df["chromStart"].min()
     cen_end = cen_df["chromEnd"].max()
 
-    cen_poly = [
-        (cen_start, lower_anchor),
-        (cen_start, height),
-        (cen_end, lower_anchor),
-        (cen_end, height),
+    cen_outline = [
+        (MplPath.MOVETO,(cen_start, lower_anchor)),
+        (MplPath.LINETO, (cen_start, height)),
+        (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
+        (MplPath.LINETO,(cen_end, height)),
+        (MplPath.LINETO,(cen_end, lower_anchor)),
+        (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
+        (MplPath.CLOSEPOLY,(cen_start, lower_anchor)),
     ]
-    chr_end_with_curve = chr_end + chr_len * curve
-    chr_start_with_curve = chr_start - chr_len * curve
+    chr_end_without_curve = chr_end - chr_len * curve
+    chr_start_without_curve = chr_start + chr_len * curve
     # Define and draw the chromosome outline, taking into account the shape around the centromere
     outline = [
-        (MplPath.MOVETO, (chr_start, height)),
-        # Top left, bottom right: ‾\_
+        (MplPath.MOVETO, (chr_start_without_curve, height)),
+        # Top part
         (MplPath.LINETO, (cen_start, height)),
-        (MplPath.LINETO, (cen_end, lower_anchor)),
-        (MplPath.LINETO, (chr_end, lower_anchor)),
-        # Right telomere: )
-        (MplPath.LINETO, (chr_end, lower_anchor)),
-        (MplPath.CURVE3, (chr_end_with_curve, ymid)),
-        (MplPath.LINETO, (chr_end, height)),
-        # Top right, bottom left: _/‾
+        (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
         (MplPath.LINETO, (cen_end, height)),
+        (MplPath.LINETO, (chr_end_without_curve, height)),
+        # Bottom part
+        (MplPath.CURVE3, (chr_end, ymid)),
+        (MplPath.LINETO, (chr_end_without_curve, lower_anchor)),
+        (MplPath.LINETO, (cen_end, lower_anchor)),
+        (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
         (MplPath.LINETO, (cen_start, lower_anchor)),
-        (MplPath.LINETO, (chr_start, lower_anchor)),
-        # Left telomere: (
-        (MplPath.CURVE3, (chr_start_with_curve, ymid)),
-        (MplPath.LINETO, (chr_start, height)),
-        (MplPath.CLOSEPOLY, (chr_start, height)),
+        (MplPath.LINETO, (chr_start_without_curve, lower_anchor)),
+        (MplPath.CURVE3, (chr_start, ymid)),
+        (MplPath.LINETO, (chr_start_without_curve, height)),
+        (MplPath.CLOSEPOLY,(chr_start_without_curve, height))
     ]
+    t = 0.01
+    x = 0
+    outside_outline = [(MplPath.MOVETO,(chr_start - x -t, height + t)),
+                       (MplPath.LINETO,(chr_end + x + t, height + t)),
+                       (MplPath.LINETO,(chr_end + x + t, lower_anchor - t)),
+                       (MplPath.LINETO,(chr_start - x - t, lower_anchor - t)),
+                       (MplPath.CLOSEPOLY,(chr_start +x + t, lower_anchor))] + outline[::-1]
     if vertical == Orientation.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
-        cen_poly = [coords[::-1] for coords in cen_poly]
-    cen_patch = PathPatch(MplPath(cen_poly), facecolor=(0.8, 0.4, 0.4), lw=0, alpha=1, zorder=2)
+        cen_outline = [(command, coords[::-1]) for command, coords in cen_outline]
+        outside_outline = [(command, coords[::-1]) for command, coords in outside_outline]
+    cen_move, cen_poly = zip(
+        *cen_outline,
+        strict=True,
+    )
+    cen_patch = PathPatch(MplPath(cen_poly, cen_move), facecolor=(0.8, 0.4, 0.4), lw=0, alpha=1, zorder=2)
+    
     ax.add_patch(cen_patch)
 
     chr_move, chr_poly = zip(
         *outline,
         strict=True,
     )
-    chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill=None, joinstyle="round", alpha=1, zorder=2)
+    mask_move, mask_poly = zip(
+        *outside_outline,
+        strict=True,
+    )
+    mask_patch = PathPatch(MplPath(mask_poly, mask_move), facecolor=(1.0, 1.0, 1.0), alpha=1, color=(1.0, 1.0, 1.0), zorder=2)
+    ax.add_patch(mask_patch)
+    chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill = None, joinstyle="round", alpha=1, zorder=2)
     ax.add_patch(chr_patch)
+    
+
+
 
         
     # If start and stop positions are provided, draw a rectangle to highlight this region
-    if start is not None and stop is not None:
+    if start is not None or stop is not None:
+        if start is None:
+            start = ax.get_xlim()[0]
+        if stop is None:
+            stop = ax.get_xlim()[1]
         if zoom:
             # Zoom in on the specified region
             if vertical == Orientation.HORIZONTAL:
@@ -316,6 +344,7 @@ def plot_ideogram(
                     edgecolor="r",
                     linewidth=1,
                     joinstyle="round",
+                    zorder=3
                 )
             else:
                 r = Rectangle(
@@ -326,14 +355,15 @@ def plot_ideogram(
                     edgecolor="r",
                     linewidth=1,
                     joinstyle="round",
+                    zorder=3
                 )
             ax.add_patch(r)
     else:
-        if not relative:
+        if not relative and _arrange_absolute_ax_lims:
             if vertical == Orientation.HORIZONTAL:
-                ax.set_xlim(chr_start_with_curve if lims_on_curve else chr_start, chr_end_with_curve if lims_on_curve else chr_end)
+                ax.set_xlim(chr_start, chr_end)
             else:
-                ax.set_ylim(chr_start_with_curve if lims_on_curve else chr_start, chr_end_with_curve if lims_on_curve else chr_end)
+                ax.set_ylim(chr_start, chr_end)
 
     if regions:
         for r_start, r_stop, r_colour in regions:
@@ -380,8 +410,9 @@ def plot_ideogram(
 
     return ax
 
-def make_ideogram_grid(
-    target: str, 
+def _make_target_grid(
+    target: Union[str, List[str]], 
+    target_stop: str = None,
     genome: GENOME = GENOME.HG38,
     start: int | None = None,
     stop: int | None = None,
@@ -389,10 +420,13 @@ def make_ideogram_grid(
     subplot_width=3, 
     height_ratio = 0.5,
     ideogram_factor:float = 0.1,
-    **ideogram_kwargs):
+    fig: plt.Figure =None,
+    subplot_spec: SubplotSpec=None,
+    **ideogram_kwargs) -> tuple[plt.Figure, list[Axes], Axes]:
     """
     Create a grid of subplots, with an ideogram at the bottom. Meant to plot multiple features on the same chromosome.
-    :param target: Target chromosome to plot.
+    :param target: (Starting) target chromosome to filter and plot.
+    :param target_stop: Ending target chromosome to filter and plot (optional).
     :param genome: Genome variant to use.
     :param start: Starting base pair position for the region of interest (optional). If start is None, stop must also be None.
     :param stop: Ending base pair position for the region of interest (optional). If stop is None, start must also be None.
@@ -403,9 +437,32 @@ def make_ideogram_grid(
     :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
     :return: A tuple containing the figure and a list of axes for the subplots.
     """
+    if target_stop is None:
+        target_stop = target
+    relative = ideogram_kwargs.get("relative", None)
+    if relative is None:
+        relative = target == target_stop
+    cytobands_df = None
+    
+    if target != target_stop:
+        cytobands_df = get_cytoband_df(genome, relative=False)
+        chr_names = cytobands_df["chrom"].unique()
+        chr_names = sorted(chr_names, key=chr_to_ord)
+        targets = chr_names[chr_names.index(target): chr_names.index(target_stop) + 1]
+        cytobands_df = cytobands_df[cytobands_df['chrom'].isin(targets)]
+        if relative:
+            cytobands_df['chromEnd'] = cytobands_df['chromEnd'] - cytobands_df['chromStart'].min()
+            cytobands_df['chromStart'] = cytobands_df['chromStart'] - cytobands_df['chromStart'].min()
+    else:
+        targets = [target]
     pfactor = int(1/ideogram_factor)
-    gspec = gs(pfactor * num_subplots + 2 * num_subplots,1)
-    fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots), facecolor="white")
+    
+    if fig is None:
+        fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots), facecolor="white")
+    if subplot_spec is None:
+        gspec = gs(pfactor * num_subplots + 2 * num_subplots,1)
+    else:
+        gspec = gsFromSubplotSpec(pfactor * num_subplots + 2 * num_subplots, 1, subplot_spec=subplot_spec)
     axes = []
     for i in range(num_subplots):
         ax = fig.add_subplot(gspec[pfactor * i + i: pfactor * (i + 1) + i, 0])
@@ -415,17 +472,17 @@ def make_ideogram_grid(
         ax.set_xticks([])
         ax.set_xticklabels([])
         ax.set_xlabel("")
-    ideogram_kwargs.update({
-        "target": target,
-        "genome": genome,
-        "start": start,
-        "stop": stop,
-        "zoom": start is not None and stop is not None,
-        "relative": ideogram_kwargs.get("relative", False),
-        "adjust_margins": False,
-        "lims_on_curve" : False,
-    })
-    ideogram_ax = plot_ideogram(fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0]), **ideogram_kwargs)
+    ideogram_ax = fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0])
+    for cnt, target in enumerate(targets):
+        ideogram_kwargs.update({
+            "target": target,
+            "genome": genome,
+            "start": start if cnt == 0 else None,
+            "stop": stop if cnt == len(targets) - 1 else None,
+            "relative": ideogram_kwargs.get("relative", False),
+            "adjust_margins": False,
+        })
+        ideogram_ax = plot_ideogram(ideogram_ax, cytobands_df=cytobands_df, _arrange_absolute_ax_lims=False, **ideogram_kwargs)
     for obj in ideogram_ax.get_children():
         if hasattr(obj, "set_clip_on"):
             obj.set_clip_on(False)
@@ -433,7 +490,86 @@ def make_ideogram_grid(
         ax.set_xlim(ideogram_ax.get_xlim())
     return fig, axes, ideogram_ax
     
+def make_ideogram_grid(
+    target: Union[str, List[str]], 
+    genome: GENOME = GENOME.HG38,
+    start: Union[str, Dict[str, int]] | None = None,
+    stop: Union[str, Dict[str, int]] | None = None,
+    num_subplots=1, 
+    subplot_width=3, 
+    height_ratio = 0.5,
+    ideogram_factor:float = 0.1,
+    **ideogram_kwargs) -> tuple[plt.Figure, Dict[str, list[Axes]], Dict[str, Axes]]:
+    """
+    Create a grid of subplots, with an ideogram at the bottom. Meant to plot multiple features on the same chromosome.
+    :param target: Target chromosome(s) to plot.
+    :param genome: Genome variant to use.
+    :param start: Starting base pair position for the region of interest per target(optional). It must be a dictionary if multiple targets are provided. If start is not given for a target, stop must also not be given.
+    :param stop: Ending base pair position for the region of interest per target(optional). It must be a dictionary if multiple targets are provided. If stop is not given for a target, start must also not be given.
+    :param num_subplots: Number of subplots to create.
+    :param subplot_width: Width of each subplot.
+    :param height_ratio: Height ratio for the subplots.
+    :param ideogram_factor: Height factor for the ideogram.
+    :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
+    :return: A tuple containing the figure and a list of axes for the subplots.
+    """
+    targets = target if isinstance(target, list) else [target]
+    ideogram_kwargs['zoom'] = ideogram_kwargs.get("zoom", False)
+    
+    if len(targets) > 1:
+        if isinstance(start, int):
+            raise ValueError("If multiple targets are provided, start must be a dictionary")
+        if isinstance(stop, int):
+            raise ValueError("If multiple targets are provided, stop must be a dictionary")
+    else:
+        start = {targets[0]: start} if isinstance(start, int) else start
+        stop = {targets[0]: stop} if isinstance(stop, int) else stop
+    if start is None:
+        start = dict()
+    if stop is None:
+        stop = dict()
+    
+    start = {t: start.get(t, None) for t in targets}
+    stop = {t: stop.get(t, None) for t in targets}
+    fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots * len(targets)), facecolor="white")
+    gs0 = gs(len(targets), 1, figure=fig)
+    value_axes = {}
+    ideogram_axes = {}
+    for i, target in enumerate(targets):
+        
+        _, a0, a1 = _make_target_grid(
+            target, genome=genome, start=start[target], stop=stop[target], 
+            num_subplots=num_subplots, subplot_width=subplot_width, height_ratio=height_ratio, ideogram_factor=ideogram_factor, subplot_spec=gs0[i, 0],
+            relative=True,
+            fig=fig, **ideogram_kwargs)
+        value_axes[target] = a0
+        ideogram_axes[target] = a1
+    return fig, value_axes, ideogram_axes
 
+def make_genome_grid(target_start: str, target_stop: str, genome: GENOME = GENOME.HG38, num_subplots=1, subplot_width=10, height_ratio = 0.5, 
+                     ideogram_factor:float = 0.1, **ideogram_kwargs) -> tuple[plt.Figure, list[Axes], Axes]:
+    """
+    Create a grid of subplots for a specific genome with a specified start and stop target.
+    :param target_start: Starting target, e.g., chr1.
+    :param target_stop: Ending target, e.g., chr5.
+    :param genome: Genome variant to use.
+    :param num_subplots: Number of subplots to create.
+    :param subplot_width: Width of each subplot.
+    :param height_ratio: Height ratio for the subplots.
+    :param ideogram_factor: Height factor for the ideogram.
+    :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
+    :return: A tuple containing the figure and a list of axes for the subplots.
+    """
+    return _make_target_grid(
+        target=target_start,
+        target_stop=target_stop,
+        genome=genome,
+        num_subplots=num_subplots,
+        subplot_width=subplot_width,
+        height_ratio=height_ratio,
+        ideogram_factor=ideogram_factor,
+        **ideogram_kwargs
+    )
 
 if __name__ == "__main__":
     fig, axes = plt.subplots(
