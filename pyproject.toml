@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 keywords = []
 authors = [
   { name = "Adoni5", email = "roryjmunro1@gmail.com" },
+  { name = "vaslem", email = "vaslemonidis@hotmail.com" }
 ]
 classifiers = [
   "Intended Audience :: Science/Research",
