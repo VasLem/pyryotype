@@ -593,6 +593,7 @@ def make_ideogram_grid(
     :param subplot_width: Width of each subplot.
     :param height_ratio: Height ratio for the subplots.
     :param ideogram_factor: Height factor for the ideogram.
+    :param grid_params: Dictionary of grid parameters for the GridSpec.
     :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
     :return: A tuple containing the figure and a list of axes for the subplots.
     """
