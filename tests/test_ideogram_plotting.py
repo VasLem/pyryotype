@@ -8,7 +8,7 @@ from pyryotype.ideogram import GENOME, Detail, Orientation
 OUT_DIR = Path(__file__).parent.parent / "example_outputs"
 
 
-def test_simple_vertical_chr1():
+def test_simple_vertical_chr3():
     fig, ax = plt.subplots(
         ncols=1,
         nrows=1,
@@ -16,9 +16,20 @@ def test_simple_vertical_chr1():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.VERTICAL)
+    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=Orientation.VERTICAL)
 
-    fig.savefig(OUT_DIR / "testing_vert.png", bbox_inches="tight")
+    fig.savefig(OUT_DIR / "testing_vert_chr3.png", bbox_inches="tight")
+def test_simple_horizontal_chr3():
+    fig, ax = plt.subplots(
+        ncols=1,
+        nrows=1,
+        figsize=(25, 3),
+        facecolor="white",
+    )
+
+    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=Orientation.HORIZONTAL)
+
+    fig.savefig(OUT_DIR / "testing_horz_chr3.png", bbox_inches="tight")
     
 def test_simple_horizontal_chr1():
     fig, ax = plt.subplots(
@@ -28,9 +39,9 @@ def test_simple_horizontal_chr1():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.HORIZONTAL)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.HORIZONTAL)
 
-    fig.savefig(OUT_DIR / "testing_horz.png", bbox_inches="tight")
+    fig.savefig(OUT_DIR / "testing_horz_chr1.png", bbox_inches="tight")
     
 
 def test_simple_vertical_chr1_start_stop():
@@ -41,9 +52,9 @@ def test_simple_vertical_chr1_start_stop():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.VERTICAL, start=150000, stop=50000000)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.VERTICAL, start=150000, stop=50000000)
 
-    fig.savefig(OUT_DIR / "testing_vert_start_stop.png", bbox_inches="tight")
+    fig.savefig(OUT_DIR / "testing_vert_chr1_start_stop.png", bbox_inches="tight")
     
     
 def test_simple_horizontal_chr1_start_stop_zoom():
@@ -54,7 +65,7 @@ def test_simple_horizontal_chr1_start_stop_zoom():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, y_label="", vertical=Orientation.HORIZONTAL, start=150000, stop=50000000, zoom=True)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.HORIZONTAL, start=150000, stop=50000000, zoom=True)
 
     fig.savefig(OUT_DIR / "testing_horz_start_stop_zoom.png", bbox_inches="tight")
     
@@ -65,7 +76,9 @@ def test_23_vertical_chm13():
 
     for ax, i in zip(axes, chain(range(1, 23), iter("XY")), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+            ax, target=f"chr{i}", label=f"Chr. {i}", 
+            left_margin=0, vertical=Orientation.VERTICAL, genome=genome,
+            label_kwargs={"rotation": 90}
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23.png", bbox_inches="tight")
@@ -77,8 +90,10 @@ def test_23_vertical_hg38():
 
     for ax, i in zip(axes, chain(range(1, 23)), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, 
-            vertical=Orientation.VERTICAL, genome=genome, relative=True
+            ax, target=f"chr{i}", label=f"Chr. {i}", left_margin=0, 
+            label_kwargs={"rotation": 90},
+            vertical=Orientation.VERTICAL, 
+            genome=genome, relative=True
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23_hg38.png", bbox_inches="tight")
@@ -90,7 +105,10 @@ def test_23_vertical_hg19():
 
     for ax, i in zip(axes, chain(range(1, 23)), strict=True):
         _ax = plot_ideogram(
-            ax, target=f"chr{i}", y_label=f"Chr. {i}", left_margin=0, vertical=Orientation.VERTICAL, genome=genome
+            ax, target=f"chr{i}", label=f"Chr. {i}", 
+            left_margin=0, vertical=Orientation.VERTICAL, 
+            label_kwargs={"rotation": 90},
+            genome=genome
         )
 
     fig.savefig(OUT_DIR / "testing_vert_23_hg19.png", bbox_inches="tight")
@@ -104,9 +122,10 @@ def test_23_vertical_chm13_bare():
         _ax = plot_ideogram(
             ax,
             target=f"chr{i}",
-            y_label=f"Chr. {i}",
+            label=f"Chr. {i}",
             left_margin=0,
             vertical=Orientation.VERTICAL,
+            label_kwargs={"rotation": 90},
             cytobands=Detail.BARE,
             genome=genome,
         )
@@ -122,7 +141,7 @@ def test_23_horizontal_chm13_bare():
         _ax = plot_ideogram(
             ax,
             target=f"chr{i}",
-            y_label=f"Chr. {i}",
+            label=f"Chr. {i}",
             left_margin=0,
             vertical=Orientation.HORIZONTAL,
             cytobands=Detail.BARE,
@@ -142,14 +161,15 @@ def test_23_vertical_chm13_regions():
         _ax = plot_ideogram(
             ax,
             target=f"chr{i}",
-            y_label=f"Chr. {i}",
+            label=f"Chr. {i}",
             left_margin=0,
             vertical=Orientation.VERTICAL,
+            label_kwargs={"rotation": 90},
             genome=genome,
             regions=regions,
         )
 
-    fig.savefig(OUT_DIR / "testing_vert_23_regions.png", bbox_inches="tight")
+    fig.savefig(OUT_DIR / "testing_vert_23_regions_chm13.png", bbox_inches="tight")
 
 
 def test_23_horz_chm13_regions():

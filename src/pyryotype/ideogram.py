@@ -9,6 +9,7 @@ from matplotlib.axes._secondary_axes import SecondaryAxis
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
 from matplotlib.typing import ColorType
+from matplotlib.text import Text
 from matplotlib.gridspec import SubplotSpec
 from matplotlib.gridspec import GridSpec as gs
 from matplotlib.gridspec import GridSpecFromSubplotSpec as gsFromSubplotSpec
@@ -161,6 +162,7 @@ def plot_ideogram(
     target_region_extent: float = 0.3,
     label: str | None = None,
     label_placement: Literal["height", "length"] = "height",
+    label_kwargs: dict = None,
     vertical: Orientation = Orientation.HORIZONTAL,
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands_df: pd.DataFrame = None,
@@ -198,19 +200,21 @@ def plot_ideogram(
 
     >>> import matplotlib.pyplot as plt
     >>> fig, ax = plt.subplots()
-    >>> ax = plot_ideogram(ax, "chr1", start=50, stop=250, y_label="Chromosome 1")
+    >>> ax = plot_ideogram(ax, "chr1", start=50, stop=250, label="Chromosome 1")
     >>> ax.get_xlim()  # To test if the ideogram was plotted (not a direct measure but gives an idea)
     (-71574971.325, 256487353.7655)
 
     # Test behaviour with a non-existent chromosome
-    >>> ax = plot_ideogram(ax, "chr_1", start=50, stop=250, y_label="Chromosome 1")# doctest: +IGNORE_EXCEPTION_DETAIL
+    >>> ax = plot_ideogram(ax, "chr_1", start=50, stop=250, label="Chromosome 1")# doctest: +IGNORE_EXCEPTION_DETAIL
     Traceback (most recent call last):
     ValueError: Chromosome chr_1 not found in cytoband data. Should be one of ...
 
     """
-    # TODO: various kwds params for passing through to other methods
-    
+    if label_kwargs is None:
+        label_kwargs = dict()
     # some checks for input before we start
+    if label is not None:
+        assert label_placement in ["height", "length"], "label_placement must be either 'height' or 'length'"
     if start is not None and stop is not None:        
         assert start < stop, "Start must be less than stop"
     if regions is not None:
@@ -277,22 +281,42 @@ def plot_ideogram(
         (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
         (MplPath.LINETO, (cen_end, height)),
         (MplPath.LINETO, (chr_end_without_curve, height)),
-        # Bottom part
+        (MplPath.CURVE3, (chr_end, height)),
         (MplPath.CURVE3, (chr_end, ymid)),
+        # Bottom part
+        (MplPath.CURVE3, (chr_end, lower_anchor)),
+        (MplPath.CURVE3, (chr_end_without_curve, lower_anchor)),
         (MplPath.LINETO, (chr_end_without_curve, lower_anchor)),
         (MplPath.LINETO, (cen_end, lower_anchor)),
         (MplPath.LINETO, ((cen_start + cen_end)/2, ymid)),
         (MplPath.LINETO, (cen_start, lower_anchor)),
         (MplPath.LINETO, (chr_start_without_curve, lower_anchor)),
+        (MplPath.CURVE3, (chr_start, lower_anchor)),
         (MplPath.CURVE3, (chr_start, ymid)),
-        (MplPath.LINETO, (chr_start_without_curve, height)),
-        (MplPath.CLOSEPOLY,(chr_start_without_curve, height))
+        (MplPath.CURVE3, (chr_start, height)),
+        (MplPath.CURVE3, (chr_start_without_curve, height)),
+        (MplPath.MOVETO, (chr_start_without_curve, height))
     ]
+    def invert_with_curve(outline):
+        outline = outline[::-1]
+        new_outline = outline.copy()
+        i = 0
+        while i < len(outline):
+            if outline[i][0] == MplPath.CURVE3:
+                j = i + 1
+                while j < len(outline) and outline[j][0] == MplPath.CURVE3:
+                    j += 1
+                new_outline[i:j] = outline[i+1:j] + [(MplPath.CURVE3, outline[j][1])] 
+                i = j + 1
+            else:
+                i += 1
+        return new_outline
+    
     outside_outline = [(MplPath.MOVETO,(chr_start, height)),
                        (MplPath.LINETO,(chr_end, height)),
                        (MplPath.LINETO,(chr_end, lower_anchor)),
                        (MplPath.LINETO,(chr_start, lower_anchor)),
-                       (MplPath.CLOSEPOLY,(chr_start, lower_anchor))] + outline[::-1]
+                       (MplPath.CLOSEPOLY,(chr_start, lower_anchor))] + invert_with_curve(outline)
     if vertical == Orientation.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
         cen_outline = [(command, coords[::-1]) for command, coords in cen_outline]
@@ -363,19 +387,20 @@ def plot_ideogram(
 
     if regions:
         for r_start, r_stop, r_colour in regions:
-            x0, width = r_start, r_stop - r_start
+            x0, rwidth = r_start, r_stop - r_start
             y0 = lower_anchor + 0.02
             # print(f"x0 {x0}, width {width}, height: he")
+            rheight = height
             if vertical == Orientation.VERTICAL:
                 x0 = lower_anchor + 0.03
                 y0 = r_start
-                height = width
-                width = 0.94
+                rheight = rwidth
+                rwidth = 0.94
 
             r = Rectangle(
                 (x0, y0),  # +0.01 should shift us off outline of chromosome
-                width=width,
-                height=height,
+                width=rwidth,
+                height=rheight,
                 fill=kwargs.get("fill", True),
                 color=r_colour,
                 joinstyle="round",
@@ -440,29 +465,38 @@ def plot_ideogram(
             
         x = [i for i,(l,u) in enumerate(zip(locs[:-1],locs[1:])) if to_place  > l and to_place <= u]
         if x:
-            locs.insert(x[0], to_place)
-            labs.insert(x[0], label)
+           pos = x[0]
         else:
             if locs and to_place > locs[-1]:
-                locs.append(to_place)
-                labs.append(label)
+                pos = len(locs)
             else:
-                locs.insert(0, to_place)
-                labs.insert(0, label)
+                pos = 0
+        locs.insert(pos, to_place)
+        labs.insert(pos, label)
+    
         if label_placement == "height":
             if vertical == Orientation.VERTICAL:
                 sec.set_xticks(locs, labs)
+                if label_kwargs:
+                    plt.setp(sec.get_xticklabels()[pos], **label_kwargs)
                 sec.spines["bottom"].set_visible(False)
             else:
                 sec.set_yticks(locs, labs)
+                if label_kwargs:
+                    plt.setp(sec.get_yticklabels()[pos], **label_kwargs)
                 sec.spines["left"].set_visible(False)
         else:
             if vertical == Orientation.VERTICAL:
                 sec.set_yticks(locs, labs)
+                if label_kwargs:
+                    plt.setp(sec.get_yticklabels()[pos], **label_kwargs)
                 sec.spines["left"].set_visible(False)
             else:
                 sec.set_xticks(locs, labs)
+                if label_kwargs:
+                    plt.setp(sec.get_xticklabels()[pos], **label_kwargs)
                 sec.spines["bottom"].set_visible(False)
+        sec.tick_params(axis=u'both', which=u'both',length=0)
         
     return ax
 
