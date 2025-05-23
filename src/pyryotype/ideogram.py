@@ -27,12 +27,12 @@ class GENOME(Enum):
     HS1 = "hs1"
 
 
-class Orientation(Enum):
+class ORIENTATION(Enum):
     VERTICAL = "Vertical"
     HORIZONTAL = "Horizontal"
 
 
-class Detail(Enum):
+class DETAIL(Enum):
     CYTOBAND = "Cytoband"
     BARE = "Bare"
 
@@ -149,7 +149,7 @@ def annotate_ideogram(ax: Axes,
     regions: list[tuple[int, int, ColorType]] | None = None,
     lower_anchor: int = 0,
     height: int = 1,
-    vertical: Orientation = Orientation.HORIZONTAL, **kwargs):
+    vertical: ORIENTATION = ORIENTATION.HORIZONTAL, **kwargs):
     """
     Annotate the ideogram with regions.
     :param ax: The axis to annotate.
@@ -178,7 +178,7 @@ def annotate_ideogram(ax: Axes,
         y0 = lower_anchor + 0.02
         # print(f"x0 {x0}, width {width}, height: he")
         rheight = height
-        if vertical == Orientation.VERTICAL:
+        if vertical == ORIENTATION.VERTICAL:
             x0 = lower_anchor + 0.03
             y0 = r_start
             rheight = rwidth
@@ -212,10 +212,10 @@ def plot_ideogram(
     label: str | None = None,
     label_placement: Literal["height", "length"] = "height",
     label_kwargs: dict = None,
-    vertical: Orientation = Orientation.HORIZONTAL,
+    vertical: ORIENTATION = ORIENTATION.HORIZONTAL,
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands_df: pd.DataFrame = None,
-    cytobands: Detail = Detail.CYTOBAND,
+    cytobands: DETAIL = DETAIL.CYTOBAND,
     relative: bool = True,
     adjust_margins: bool = True,
     _arrange_absolute_ax_lims: bool = True,
@@ -235,7 +235,7 @@ def plot_ideogram(
     :param right_margin: Margin for the right side of the x-axis.
     :param left_margin: Margin for the left side of the x-axis.
     :param target_region_extent: Extent of the target region highlight.
-    :param vertical: Orientation of ideogram. False draws horizontal ideograms.
+    :param vertical: ORIENTATION of ideogram. False draws horizontal ideograms.
     :param regions: List of regions to colour in on the karyotype. Respects vertical kwarg - a region should
     be a tuple of format (start, stop, colour)
     :param cytobands_df: DataFrame containing cytoband data with columns "chrom", "chromStart",
@@ -285,8 +285,8 @@ def plot_ideogram(
     chr_end = df["chromEnd"].max()
     chr_len = chr_end - chr_start
     ymid = (max(yrange) - min(yrange)) / 2
-    if cytobands == Detail.CYTOBAND:
-        if vertical == Orientation.VERTICAL:
+    if cytobands == DETAIL.CYTOBAND:
+        if vertical == ORIENTATION.VERTICAL:
             yranges = df[["chromStart", "width"]].values
             x_range = (lower_anchor, height)
             face_colours = iter(df["colour"])
@@ -358,7 +358,7 @@ def plot_ideogram(
                        (MplPath.LINETO,(chr_end, lower_anchor)),
                        (MplPath.LINETO,(chr_start, lower_anchor)),
                        (MplPath.CLOSEPOLY,(chr_start, lower_anchor))] + invert_with_curve(outline)
-    if vertical == Orientation.VERTICAL:
+    if vertical == ORIENTATION.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
         cen_outline = [(command, coords[::-1]) for command, coords in cen_outline]
         outside_outline = [(command, coords[::-1]) for command, coords in outside_outline]
@@ -390,13 +390,13 @@ def plot_ideogram(
         if stop is None:
             stop = ax.get_xlim()[1]
         # Zoom in on the specified region
-        if vertical == Orientation.HORIZONTAL:
+        if vertical == ORIENTATION.HORIZONTAL:
             ax.set_xlim(start, stop)
         else:
             ax.set_ylim(start, stop)
     else:
         if not relative and _arrange_absolute_ax_lims:
-            if vertical == Orientation.HORIZONTAL:
+            if vertical == ORIENTATION.HORIZONTAL:
                 ax.set_xlim(chr_start, chr_end)
             else:
                 ax.set_ylim(chr_start, chr_end)
@@ -404,7 +404,7 @@ def plot_ideogram(
     if regions:
         annotate_ideogram(ax, regions, height=height, lower_anchor=lower_anchor, vertical=vertical, **kwargs)
         
-    if vertical == Orientation.VERTICAL:
+    if vertical == ORIENTATION.VERTICAL:
         ax.set_xlim(lower_anchor -0.05, height + 0.05)
     else:
         ax.set_ylim(lower_anchor -0.05, height + 0.05)
@@ -434,7 +434,7 @@ def plot_ideogram(
     if label is not None:
         if label_placement == "height":
             to_place = height/2
-            if vertical == Orientation.VERTICAL:
+            if vertical == ORIENTATION.VERTICAL:
                 sec = get_secondary_axis(ax, "x")
                 labs = sec.get_xticklabels()
                 locs = sec.get_xticks()
@@ -444,7 +444,7 @@ def plot_ideogram(
                 locs = sec.get_yticks()
         elif label_placement == "length":
             to_place = (chr_start + chr_end) / 2
-            if vertical == Orientation.VERTICAL:
+            if vertical == ORIENTATION.VERTICAL:
                 sec = get_secondary_axis(ax, "y")
                 labs = sec.get_yticklabels()
                 locs = sec.get_yticks()
@@ -474,7 +474,7 @@ def plot_ideogram(
         labs.insert(pos, label)
     
         if label_placement == "height":
-            if vertical == Orientation.VERTICAL:
+            if vertical == ORIENTATION.VERTICAL:
                 sec.set_xticks(locs, labs)
                 if label_kwargs:
                     plt.setp(sec.get_xticklabels()[pos], **label_kwargs)
@@ -485,7 +485,7 @@ def plot_ideogram(
                     plt.setp(sec.get_yticklabels()[pos], **label_kwargs)
                 sec.spines["left"].set_visible(False)
         else:
-            if vertical == Orientation.VERTICAL:
+            if vertical == ORIENTATION.VERTICAL:
                 sec.set_yticks(locs, labs)
                 if label_kwargs:
                     plt.setp(sec.get_yticklabels()[pos], **label_kwargs)

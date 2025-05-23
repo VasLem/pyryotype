@@ -3,7 +3,7 @@ from pathlib import Path
 
 from matplotlib import pyplot as plt
 from pyryotype import plot_ideogram
-from pyryotype.ideogram import GENOME, Detail, Orientation
+from pyryotype.ideogram import GENOME, DETAIL, ORIENTATION
 
 OUT_DIR = Path(__file__).parent.parent / "example_outputs"
 
@@ -16,7 +16,7 @@ def test_simple_vertical_chr3():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=Orientation.VERTICAL)
+    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=ORIENTATION.VERTICAL)
 
     fig.savefig(OUT_DIR / "testing_vert_chr3.png", bbox_inches="tight")
 def test_simple_horizontal_chr3():
@@ -27,7 +27,7 @@ def test_simple_horizontal_chr3():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=Orientation.HORIZONTAL)
+    plot_ideogram(ax, target="chr3", left_margin=0, label="", vertical=ORIENTATION.HORIZONTAL)
 
     fig.savefig(OUT_DIR / "testing_horz_chr3.png", bbox_inches="tight")
     
@@ -39,7 +39,7 @@ def test_simple_horizontal_chr1():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.HORIZONTAL)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=ORIENTATION.HORIZONTAL)
 
     fig.savefig(OUT_DIR / "testing_horz_chr1.png", bbox_inches="tight")
     
@@ -52,7 +52,7 @@ def test_simple_vertical_chr1_start_stop():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.VERTICAL, start=150000, stop=50000000)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=ORIENTATION.VERTICAL, start=150000, stop=50000000)
 
     fig.savefig(OUT_DIR / "testing_vert_chr1_start_stop.png", bbox_inches="tight")
     
@@ -65,7 +65,7 @@ def test_simple_horizontal_chr1_start_stop():
         facecolor="white",
     )
 
-    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=Orientation.HORIZONTAL, start=150000, stop=50000000)
+    plot_ideogram(ax, target="chr1", left_margin=0, label="", vertical=ORIENTATION.HORIZONTAL, start=150000, stop=50000000)
 
     fig.savefig(OUT_DIR / "testing_horz_start_stop.png", bbox_inches="tight")
     
@@ -77,7 +77,7 @@ def test_23_vertical_chm13():
     for ax, i in zip(axes, chain(range(1, 23), iter("XY")), strict=True):
         _ax = plot_ideogram(
             ax, target=f"chr{i}", label=f"Chr. {i}", 
-            left_margin=0, vertical=Orientation.VERTICAL, genome=genome,
+            left_margin=0, vertical=ORIENTATION.VERTICAL, genome=genome,
             label_kwargs={"rotation": 90}
         )
 
@@ -92,7 +92,7 @@ def test_23_vertical_hg38():
         _ax = plot_ideogram(
             ax, target=f"chr{i}", label=f"Chr. {i}", left_margin=0, 
             label_kwargs={"rotation": 90},
-            vertical=Orientation.VERTICAL, 
+            vertical=ORIENTATION.VERTICAL, 
             genome=genome, relative=True
         )
 
@@ -106,7 +106,7 @@ def test_23_vertical_hg19():
     for ax, i in zip(axes, chain(range(1, 23)), strict=True):
         _ax = plot_ideogram(
             ax, target=f"chr{i}", label=f"Chr. {i}", 
-            left_margin=0, vertical=Orientation.VERTICAL, 
+            left_margin=0, vertical=ORIENTATION.VERTICAL, 
             label_kwargs={"rotation": 90},
             genome=genome
         )
@@ -124,9 +124,9 @@ def test_23_vertical_chm13_bare():
             target=f"chr{i}",
             label=f"Chr. {i}",
             left_margin=0,
-            vertical=Orientation.VERTICAL,
+            vertical=ORIENTATION.VERTICAL,
             label_kwargs={"rotation": 90},
-            cytobands=Detail.BARE,
+            cytobands=DETAIL.BARE,
             genome=genome,
         )
 
@@ -143,8 +143,8 @@ def test_23_horizontal_chm13_bare():
             target=f"chr{i}",
             label=f"Chr. {i}",
             left_margin=0,
-            vertical=Orientation.HORIZONTAL,
-            cytobands=Detail.BARE,
+            vertical=ORIENTATION.HORIZONTAL,
+            cytobands=DETAIL.BARE,
             genome=genome,
         )
 
@@ -163,7 +163,7 @@ def test_23_vertical_chm13_regions():
             target=f"chr{i}",
             label=f"Chr. {i}",
             left_margin=0,
-            vertical=Orientation.VERTICAL,
+            vertical=ORIENTATION.VERTICAL,
             label_kwargs={"rotation": 90},
             genome=genome,
             regions=regions,
@@ -185,7 +185,7 @@ def test_23_horz_chm13_regions():
             y_label=f"Chr. {i}",
             left_margin=0,
             height=0.99,
-            vertical=Orientation.HORIZONTAL,
+            vertical=ORIENTATION.HORIZONTAL,
             genome=genome,
             regions=regions,
         )
