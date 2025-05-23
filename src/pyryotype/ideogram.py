@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.axes._secondary_axes import SecondaryAxis
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path as MplPath
 from matplotlib.typing import ColorType
@@ -16,7 +17,7 @@ from pyryotype.plotting_utils import set_xmargin
 import re
 from typeguard import check_type
 import numpy as np
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Literal
 
 class GENOME(Enum):
     HG19 = "hg19"
@@ -158,7 +159,8 @@ def plot_ideogram(
     right_margin: float = 0.005,
     left_margin: float = 0.25,
     target_region_extent: float = 0.3,
-    y_label: str | None = None,
+    label: str | None = None,
+    label_placement: Literal["height", "length"] = "height",
     vertical: Orientation = Orientation.HORIZONTAL,
     regions: list[tuple[int, int, ColorType]] | None = None,
     cytobands_df: pd.DataFrame = None,
@@ -286,13 +288,11 @@ def plot_ideogram(
         (MplPath.LINETO, (chr_start_without_curve, height)),
         (MplPath.CLOSEPOLY,(chr_start_without_curve, height))
     ]
-    t = 0.01
-    x = 0
-    outside_outline = [(MplPath.MOVETO,(chr_start - x -t, height + t)),
-                       (MplPath.LINETO,(chr_end + x + t, height + t)),
-                       (MplPath.LINETO,(chr_end + x + t, lower_anchor - t)),
-                       (MplPath.LINETO,(chr_start - x - t, lower_anchor - t)),
-                       (MplPath.CLOSEPOLY,(chr_start +x + t, lower_anchor))] + outline[::-1]
+    outside_outline = [(MplPath.MOVETO,(chr_start, height)),
+                       (MplPath.LINETO,(chr_end, height)),
+                       (MplPath.LINETO,(chr_end, lower_anchor)),
+                       (MplPath.LINETO,(chr_start, lower_anchor)),
+                       (MplPath.CLOSEPOLY,(chr_start, lower_anchor))] + outline[::-1]
     if vertical == Orientation.VERTICAL:
         outline = [(command, coords[::-1]) for command, coords in outline]
         cen_outline = [(command, coords[::-1]) for command, coords in cen_outline]
@@ -317,10 +317,6 @@ def plot_ideogram(
     ax.add_patch(mask_patch)
     chr_patch = PathPatch(MplPath(chr_poly, chr_move), fill = None, joinstyle="round", alpha=1, zorder=2)
     ax.add_patch(chr_patch)
-    
-
-
-
         
     # If start and stop positions are provided, draw a rectangle to highlight this region
     if start is not None or stop is not None:
@@ -398,19 +394,80 @@ def plot_ideogram(
         ax.spines[side].set_visible(False)
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
-
-    # Add chromosome name to the plot
-    if y_label is not None:
-        if vertical == Orientation.VERTICAL:
-            y0, _y1 = ax.get_ylim()
-            ax.text(0.5, y0, y_label, fontsize=kwargs.get("fontsize", "x-large"), va="bottom", ha="center", rotation=90)
+    def get_secondary_axis(ax, which: str):
+        for x in ax.get_children():
+            if isinstance(x, SecondaryAxis):
+                if which == "x" and x._loc=="bottom":
+                    return x
+                if which == "y" and x._loc=="left":
+                    return x
+        if which == "x":
+            return ax.secondary_xaxis("bottom")
         else:
-            x0, _x1 = ax.get_xlim()
-            ax.text(x0, 1, y_label, fontsize=kwargs.get("fontsize", "x-large"), va="bottom")
-
+            return ax.secondary_yaxis("left")
+        
+    # Add chromosome name to the plot
+    if label is not None:
+        if label_placement == "height":
+            to_place = height/2
+            if vertical == Orientation.VERTICAL:
+                sec = get_secondary_axis(ax, "x")
+                labs = sec.get_xticklabels()
+                locs = sec.get_xticks()
+            else:
+                sec = get_secondary_axis(ax, "y")
+                labs = sec.get_yticklabels()
+                locs = sec.get_yticks()
+        elif label_placement == "length":
+            to_place = (chr_start + chr_end) / 2
+            if vertical == Orientation.VERTICAL:
+                sec = get_secondary_axis(ax, "y")
+                labs = sec.get_yticklabels()
+                locs = sec.get_yticks()
+            else:
+                sec = get_secondary_axis(ax, "x")
+                labs = sec.get_xticklabels()
+                locs = sec.get_xticks()
+        def is_number(s):
+            try:
+                float(s)
+                return True
+            except ValueError:
+                return False
+        tk = [i for i, (l,x) in enumerate(zip(labs,locs)) if not is_number(l.get_text()) or round(float(x), 2) != round(float(l.get_text()),2)]
+        labs = [labs[i] for i in tk]
+        locs = [locs[i] for i in tk]
+            
+        x = [i for i,(l,u) in enumerate(zip(locs[:-1],locs[1:])) if to_place  > l and to_place <= u]
+        if x:
+            locs.insert(x[0], to_place)
+            labs.insert(x[0], label)
+        else:
+            if locs and to_place > locs[-1]:
+                locs.append(to_place)
+                labs.append(label)
+            else:
+                locs.insert(0, to_place)
+                labs.insert(0, label)
+        if label_placement == "height":
+            if vertical == Orientation.VERTICAL:
+                sec.set_xticks(locs, labs)
+                sec.spines["bottom"].set_visible(False)
+            else:
+                sec.set_yticks(locs, labs)
+                sec.spines["left"].set_visible(False)
+        else:
+            if vertical == Orientation.VERTICAL:
+                sec.set_yticks(locs, labs)
+                sec.spines["left"].set_visible(False)
+            else:
+                sec.set_xticks(locs, labs)
+                sec.spines["bottom"].set_visible(False)
+        
     return ax
 
 def _make_target_grid(
+    
     target: Union[str, List[str]], 
     target_stop: str = None,
     genome: GENOME = GENOME.HG38,
@@ -469,14 +526,19 @@ def _make_target_grid(
         axes.append(ax)
     for ax in axes[1:]:
         ax.sharex(axes[0])
-        ax.set_xticks([])
-        ax.set_xticklabels([])
-        ax.set_xlabel("")
+    ax.set_xticks([])
+    ax.set_xticklabels([])
+    ax.set_xlabel("")
     ideogram_ax = fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0])
+    ideogram_ax.set_xticks([])
+    ideogram_ax.set_xticklabels([])
+    ideogram_ax.set_xlabel("")
     for cnt, target in enumerate(targets):
         ideogram_kwargs.update({
             "target": target,
             "genome": genome,
+            "label": target,
+            "label_placement": ideogram_kwargs.get("label_placement", "height" if len(targets) == 1 else "length"),
             "start": start if cnt == 0 else None,
             "stop": stop if cnt == len(targets) - 1 else None,
             "relative": ideogram_kwargs.get("relative", False),
