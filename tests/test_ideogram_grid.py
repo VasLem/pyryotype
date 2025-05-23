@@ -19,6 +19,16 @@ def test_ideogram_grid_generation_three_targets():
     )
     fig.savefig(OUT_DIR / "testing_ideogram_grid_three_targets.png", bbox_inches="tight")
 
+def test_ideogram_grid_generation_four_targets_two_columns():
+    fig, axes, ideogram_ax = make_ideogram_grid(
+        target=["chr1", "chr2", "chr5"],
+        num_subplots=2,
+        grid_params=dict(ncols=2)
+    )
+    fig.savefig(OUT_DIR / "testing_ideogram_grid_three_targets_two_cols.png", bbox_inches="tight")
+
+
+
 def test_ideogram_grid_generation_three_targets_with_start_stop():
     # should raise
     try:
@@ -40,3 +50,10 @@ def test_ideogram_grid_generation_three_targets_with_start_stop():
     fig.savefig(
         OUT_DIR / "testing_ideogram_grid_three_targets_with_start_stop.png",
         bbox_inches="tight")
+
+def test_ideogram_grid_generation_three_targets_no_subplots():
+    fig, axes, ideogram_ax = make_ideogram_grid(
+        target=["chr1", "chr2", "chr22"],
+        num_subplots=0,
+    )
+    fig.savefig(OUT_DIR / "testing_ideogram_grid_three_targets_no_subplots.png", bbox_inches="tight")

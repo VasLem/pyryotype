@@ -13,7 +13,7 @@ from matplotlib.text import Text
 from matplotlib.gridspec import SubplotSpec
 from matplotlib.gridspec import GridSpec as gs
 from matplotlib.gridspec import GridSpecFromSubplotSpec as gsFromSubplotSpec
-
+from math import ceil
 from pyryotype.plotting_utils import set_xmargin
 import re
 from typeguard import check_type
@@ -145,7 +145,58 @@ def get_cytoband_df(genome: GENOME, relative: bool) -> pd.DataFrame:
     cytobands = cytobands.drop(columns=["offset"])
     return cytobands
 
+def annotate_ideogram(ax: Axes,
+    regions: list[tuple[int, int, ColorType]] | None = None,
+    lower_anchor: int = 0,
+    height: int = 1,
+    vertical: Orientation = Orientation.HORIZONTAL, **kwargs):
+    """
+    Annotate the ideogram with regions.
+    :param ax: The axis to annotate.
+    :param regions: List of regions to annotate.
+    """
+    assert isinstance(regions, list), "Regions must be a list of tuples"
+    for region in regions:
+        assert len(region) == 3, "Each region must be a tuple of (start, stop, colour)"
+        assert isinstance(region[0], int), "Start must be an integer"
+        assert isinstance(region[1], int), "Stop must be an integer"
+        assert region[0] < region[1], "Start must be less than stop"
+        assert check_type(region[2], ColorType), "Third element must be a colour"
+    for region in regions:
+        start, stop, colour = region
+        ax.add_patch(
+            Rectangle(
+                (start, 0),
+                stop - start,
+                1,
+                color=colour,
+                alpha=0.5,
+            )
+        )
+    for r_start, r_stop, r_colour in regions:
+        x0, rwidth = r_start, r_stop - r_start
+        y0 = lower_anchor + 0.02
+        # print(f"x0 {x0}, width {width}, height: he")
+        rheight = height
+        if vertical == Orientation.VERTICAL:
+            x0 = lower_anchor + 0.03
+            y0 = r_start
+            rheight = rwidth
+            rwidth = 0.94
 
+        r = Rectangle(
+                (x0, y0),  # +0.01 should shift us off outline of chromosome
+                width=rwidth,
+                height=rheight,
+                fill=kwargs.get("fill", True),
+                color=r_colour,
+                joinstyle="round",
+                zorder=3,
+                alpha=kwargs.get("alpha", 0.5),
+                lw=kwargs.get("lw", 1),
+            )
+        ax.add_patch(r)
+        
 def plot_ideogram(
     ax: Axes,
     target: str,
@@ -158,7 +209,6 @@ def plot_ideogram(
     y_margin: float = 0.05,
     right_margin: float = 0.005,
     left_margin: float = 0.25,
-    target_region_extent: float = 0.3,
     label: str | None = None,
     label_placement: Literal["height", "length"] = "height",
     label_kwargs: dict = None,
@@ -215,14 +265,7 @@ def plot_ideogram(
         assert label_placement in ["height", "length"], "label_placement must be either 'height' or 'length'"
     if start is not None and stop is not None:        
         assert start < stop, "Start must be less than stop"
-    if regions is not None:
-        assert isinstance(regions, list), "Regions must be a list of tuples"
-        for region in regions:
-            assert len(region) == 3, "Each region must be a tuple of (start, stop, colour)"
-            assert isinstance(region[0], int), "Start must be an integer"
-            assert isinstance(region[1], int), "Stop must be an integer"
-            assert region[0] < region[1], "Start must be less than stop"
-            assert check_type(region[2], ColorType), "Third element must be a colour"
+
     if cytobands_df is None:
         df = get_cytoband_df(genome, relative=relative)
     else:
@@ -359,29 +402,8 @@ def plot_ideogram(
                 ax.set_ylim(chr_start, chr_end)
 
     if regions:
-        for r_start, r_stop, r_colour in regions:
-            x0, rwidth = r_start, r_stop - r_start
-            y0 = lower_anchor + 0.02
-            # print(f"x0 {x0}, width {width}, height: he")
-            rheight = height
-            if vertical == Orientation.VERTICAL:
-                x0 = lower_anchor + 0.03
-                y0 = r_start
-                rheight = rwidth
-                rwidth = 0.94
-
-            r = Rectangle(
-                (x0, y0),  # +0.01 should shift us off outline of chromosome
-                width=rwidth,
-                height=rheight,
-                fill=kwargs.get("fill", True),
-                color=r_colour,
-                joinstyle="round",
-                zorder=3,
-                alpha=kwargs.get("alpha", 0.5),
-                lw=kwargs.get("lw", 1),
-            )
-            ax.add_patch(r)
+        annotate_ideogram(ax, regions, height=height, lower_anchor=lower_anchor, vertical=vertical, **kwargs)
+        
     if vertical == Orientation.VERTICAL:
         ax.set_xlim(lower_anchor -0.05, height + 0.05)
     else:
@@ -498,7 +520,7 @@ def _make_target_grid(
     :param genome: Genome variant to use.
     :param start: Starting base pair position for the region of interest (optional). If start is None, stop must also be None.
     :param stop: Ending base pair position for the region of interest (optional). If stop is None, start must also be None.
-    :param num_subplots: Number of subplots to create.
+    :param num_subplots: Number of subplots to create. If 0, no subplots are created, only the ideogram axis is made.
     :param subplot_width: Width of each subplot.
     :param height_ratio: Height ratio for the subplots.
     :param ideogram_factor: Height factor for the ideogram.
@@ -527,23 +549,29 @@ def _make_target_grid(
     else:
         targets = [target]
     pfactor = int(1/ideogram_factor)
-    
-    if fig is None:
-        fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots), facecolor="white")
-    if subplot_spec is None:
-        gspec = gs(pfactor * num_subplots + 2 * num_subplots -1, 1, hspace=0.05, wspace=0.05)
-    else:
-        gspec = gsFromSubplotSpec(pfactor * num_subplots + 2 * num_subplots - 1, 1, subplot_spec=subplot_spec, hspace=0.05, wspace=0.05)
     axes = []
-    for i in range(num_subplots):
-        ax = fig.add_subplot(gspec[pfactor * i + i: pfactor * (i + 1) + i, 0])
-        axes.append(ax)
-    for ax in axes[1:]:
-        ax.sharex(axes[0])
-    ax.set_xticks([])
-    ax.set_xticklabels([])
-    ax.set_xlabel("")
-    ideogram_ax = fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0])
+
+    if fig is None:
+        fig = plt.figure(figsize=(subplot_width, subplot_width * ((height_ratio * num_subplots) if num_subplots > 0 else height_ratio)), facecolor="white")
+    if num_subplots > 0:
+        if subplot_spec is None:
+            gspec = gs(pfactor * num_subplots + 2 * num_subplots -1, 1, hspace=0.05, wspace=0.05)
+        else:
+            gspec = gsFromSubplotSpec(pfactor * num_subplots + 2 * num_subplots - 1, 1, subplot_spec=subplot_spec, hspace=0.05, wspace=0.05)
+        for i in range(num_subplots):
+            ax = fig.add_subplot(gspec[pfactor * i + i: pfactor * (i + 1) + i, 0])
+            axes.append(ax)
+        for ax in axes[1:]:
+            ax.sharex(axes[0])
+            ax.set_xticks([])
+            ax.set_xticklabels([])
+            ax.set_xlabel("")
+        ideogram_ax = fig.add_subplot(gspec[-num_subplots:, 0], sharex=axes[0])
+    else:
+        if subplot_spec is None:
+            ideogram_ax = fig.add_subplot()
+        else:
+            ideogram_ax = fig.add_subplot(subplot_spec)
     ideogram_ax.set_xticks([])
     ideogram_ax.set_xticklabels([])
     ideogram_ax.set_xlabel("")
@@ -563,13 +591,13 @@ def _make_target_grid(
         start = chr_start
     if stop is None:
         stop = chr_end
-    ax.set_xlim(start, stop) 
     # for obj in ideogram_ax.get_children():
     #     if hasattr(obj, "set_clip_on"):
     #         obj.set_clip_on(False)
-    for ax in axes:
-        ax.set_xlim(ideogram_ax.get_xlim())
-    axes[-1].spines["bottom"].set_visible(False)
+    if num_subplots > 0:
+        for ax in axes:
+            ax.set_xlim(ideogram_ax.get_xlim())
+        axes[-1].spines["bottom"].set_visible(False)
     return fig, axes, ideogram_ax
     
 def make_ideogram_grid(
@@ -579,7 +607,7 @@ def make_ideogram_grid(
     stop: Union[str, Dict[str, int]] | None = None,
     num_subplots=1, 
     subplot_width=3, 
-    height_ratio = 0.5,
+    height_ratio = None,
     ideogram_factor:float = 0.1,
     grid_params: dict = None,
     **ideogram_kwargs) -> tuple[plt.Figure, Dict[str, list[Axes]], Dict[str, Axes]]:
@@ -591,7 +619,7 @@ def make_ideogram_grid(
     :param stop: Ending base pair position for the region of interest per target(optional). It must be a dictionary if multiple targets are provided. If stop is not given for a target, start must also not be given.
     :param num_subplots: Number of subplots to create.
     :param subplot_width: Width of each subplot.
-    :param height_ratio: Height ratio for the subplots.
+    :param height_ratio: Height ratio for the subplots, defaults to 0.5 when number of subplots is larger than 1, otherwise 0.1.
     :param ideogram_factor: Height factor for the ideogram.
     :param grid_params: Dictionary of grid parameters for the GridSpec.
     :param ideogram_kwargs: Additional keyword arguments for the ideogram plotting function.
@@ -606,7 +634,11 @@ def make_ideogram_grid(
                         "left": grid_params.get('left', 0.1),
                         "right": grid_params.get('right', 0.95),
                         })
-    
+    if height_ratio is None:
+        if num_subplots > 1:
+            height_ratio = 0.5
+        else:
+            height_ratio = 0.1
     if len(targets) > 1:
         if isinstance(start, int):
             raise ValueError("If multiple targets are provided, start must be a dictionary")
@@ -622,8 +654,25 @@ def make_ideogram_grid(
     
     start = {t: start.get(t, None) for t in targets}
     stop = {t: stop.get(t, None) for t in targets}
-    fig = plt.figure(figsize=(subplot_width, subplot_width * height_ratio * num_subplots * len(targets)), facecolor="white", )
-    gs0 = gs(len(targets), 1, figure=fig, **grid_params)
+    nrows = ncols = None
+    if 'nrows' in grid_params:
+        nrows = grid_params["nrows"]
+        del grid_params["nrows"]
+    if 'ncols' in grid_params:
+        ncols = grid_params["ncols"]
+        del grid_params["ncols"]
+    if ncols is None and nrows is not None:
+        ncols = ceil(len(targets) / nrows)
+    if nrows is None and ncols is not None:
+        nrows = ceil(len(targets) / ncols)
+    if ncols is None and nrows is None:
+        nrows = len(targets)
+        ncols = 1
+    fig = plt.figure(figsize=(subplot_width * ncols, subplot_width * (height_ratio * num_subplots if num_subplots else height_ratio) * nrows), facecolor="white", )
+    
+    gs0 = gs(nrows, ncols, figure=fig, **grid_params)
+    gs0 = [gs0[i, j] for i in range(nrows) for j in range(ncols)]
+    
     value_axes = {}
     ideogram_axes = {}
     for i, target in enumerate(targets):
@@ -637,7 +686,7 @@ def make_ideogram_grid(
             subplot_width=subplot_width, 
             height_ratio=height_ratio, 
             ideogram_factor=ideogram_factor,
-            subplot_spec=gs0[i, 0],
+            subplot_spec=gs0[i],
             relative=True,
             fig=fig, 
             **ideogram_kwargs)
